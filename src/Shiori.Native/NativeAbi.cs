@@ -47,6 +47,24 @@ internal static partial class NativeAbi
         out NativeBuffer result,
         out NativeBuffer error);
 
+    [LibraryImport(LibraryName, EntryPoint = "shiori_engine_index_status")]
+    internal static partial int GetIndexStatus(
+        ShioriEngineHandle handle,
+        out NativeBuffer result,
+        out NativeBuffer error);
+
+    [LibraryImport(LibraryName, EntryPoint = "shiori_engine_index_build")]
+    internal static partial int BuildIndex(
+        ShioriEngineHandle handle,
+        out NativeBuffer result,
+        out NativeBuffer error);
+
+    [LibraryImport(LibraryName, EntryPoint = "shiori_engine_index_rebuild")]
+    internal static partial int RebuildIndex(
+        ShioriEngineHandle handle,
+        out NativeBuffer result,
+        out NativeBuffer error);
+
     [LibraryImport(LibraryName, EntryPoint = "shiori_engine_close")]
     [return: MarshalAs(UnmanagedType.I1)]
     internal static partial bool Close(nint handle);

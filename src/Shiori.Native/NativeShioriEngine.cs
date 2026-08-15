@@ -46,6 +46,15 @@ public sealed class NativeShioriEngine : IShioriEngine
         }
     }
 
+    /// <inheritdoc />
+    public IndexStatus GetIndexStatus() => ReadIndexStatus(NativeAbi.GetIndexStatus, "Native index status failed.");
+
+    /// <inheritdoc />
+    public IndexStatus BuildIndex() => ReadIndexStatus(NativeAbi.BuildIndex, "Native index build failed.");
+
+    /// <inheritdoc />
+    public IndexStatus RebuildIndex() => ReadIndexStatus(NativeAbi.RebuildIndex, "Native index rebuild failed.");
+
     /// <summary>Opens the native engine for an explicitly allowed workspace.</summary>
     public static unsafe NativeShioriEngine Open(string workspace)
     {
@@ -175,6 +184,26 @@ public sealed class NativeShioriEngine : IShioriEngine
         }
     }
 
+    private IndexStatus ReadIndexStatus(IndexOperation operation, string fallbackMessage)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var status = operation(_handle, out var result, out var error);
+        if (status != 0)
+        {
+            throw CreateException(error, fallbackMessage);
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<IndexStatus>(ReadBuffer(result), JsonOptions)
+                ?? throw new ShioriEngineException("Native engine returned invalid index status.");
+        }
+        finally
+        {
+            NativeAbi.FreeBuffer(result);
+        }
+    }
+
     private static string ReadBuffer(NativeAbi.NativeBuffer buffer)
     {
         return buffer.Pointer == 0 || buffer.Length == 0
@@ -183,4 +212,9 @@ public sealed class NativeShioriEngine : IShioriEngine
     }
 
     private sealed record SearchResponse(IReadOnlyList<SearchResult> Results);
+
+    private delegate int IndexOperation(
+        ShioriEngineHandle handle,
+        out NativeAbi.NativeBuffer result,
+        out NativeAbi.NativeBuffer error);
 }

@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 version = "0.0.0.0"
 
 [dependencies]
+globset = "0.4.20"
 ignore = "0.4.33"
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 serde = { version = "1.0.229", features = ["derive"] }

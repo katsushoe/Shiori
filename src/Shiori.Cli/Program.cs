@@ -18,6 +18,7 @@ static int Run(string[] arguments)
         {
             "find" => RunFind(arguments[1..]),
             "grep" => RunGrep(arguments[1..]),
+            "index" => RunIndex(arguments[1..]),
             "doctor" => RunDoctor(),
             "serve" => RunServer(arguments[1..]),
             _ => Fail($"Unknown command: {arguments[0]}")
@@ -27,6 +28,27 @@ static int Run(string[] arguments)
     {
         return Fail(exception.Message);
     }
+}
+
+static int RunIndex(string[] arguments)
+{
+    if (arguments.Length == 0) return Fail("index requires build, status, or rebuild.");
+    var workspace = GetOption(arguments, "--allow")
+        ?? throw new ArgumentException("--allow is required.");
+    using var engine = NativeShioriEngine.Open(workspace);
+    var status = arguments[0] switch
+    {
+        "build" => engine.BuildIndex(),
+        "status" => engine.GetIndexStatus(),
+        "rebuild" => engine.RebuildIndex(),
+        _ => throw new ArgumentException($"Unknown index command: {arguments[0]}")
+    };
+    Console.WriteLine(JsonSerializer.Serialize(status, new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        WriteIndented = true,
+    }));
+    return 0;
 }
 
 static int RunGrep(string[] arguments)
@@ -109,6 +131,9 @@ static string Usage() => """
       shiori find <query> --allow <directory> [--limit <1-100>]
       shiori grep <query> --allow <directory> [--path <path>] [--glob <glob>]
         [--regex] [--case-sensitive] [--context <0-10>] [--limit <1-100>]
+      shiori index build --allow <directory>
+      shiori index status --allow <directory>
+      shiori index rebuild --allow <directory>
       shiori doctor
       shiori serve [--port <1-65535>]
     """;

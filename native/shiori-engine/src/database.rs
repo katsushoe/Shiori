@@ -1,5 +1,6 @@
 use crate::index::IndexedFile;
 use rusqlite::{Connection, params};
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::fmt::Write;
 use std::fs;
@@ -19,6 +20,16 @@ pub struct WorkspaceInfo {
     pub name: String,
     pub database_path: String,
     pub schema_version: i64,
+}
+
+#[derive(Serialize)]
+pub struct IndexStatus {
+    pub workspace_id: String,
+    pub status: String,
+    pub indexed_files: i64,
+    pub index_version: i64,
+    pub last_scan: Option<String>,
+    pub last_full_index: Option<String>,
 }
 
 impl WorkspaceDatabase {
@@ -145,6 +156,35 @@ impl WorkspaceDatabase {
         transaction
             .commit()
             .map_err(|source| format!("cannot commit file index update: {source}"))
+    }
+
+    pub fn index_status(&self) -> Result<IndexStatus, String> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "workspace database lock is poisoned".to_owned())?;
+        connection
+            .query_row(
+                "SELECT state.workspace_id, state.status, count(files.id),
+                        state.index_version, state.last_scan, state.last_full_index
+                 FROM index_state AS state
+                 LEFT JOIN files ON files.workspace_id = state.workspace_id
+                 WHERE state.workspace_id = ?1
+                 GROUP BY state.workspace_id, state.status, state.index_version,
+                          state.last_scan, state.last_full_index",
+                params![self.info.id],
+                |row| {
+                    Ok(IndexStatus {
+                        workspace_id: row.get(0)?,
+                        status: row.get(1)?,
+                        indexed_files: row.get(2)?,
+                        index_version: row.get(3)?,
+                        last_scan: row.get(4)?,
+                        last_full_index: row.get(5)?,
+                    })
+                },
+            )
+            .map_err(|source| format!("cannot read index status: {source}"))
     }
 
     pub fn search_files(&self, query: &str, limit: usize) -> Result<Vec<PathBuf>, String> {
@@ -426,11 +466,19 @@ mod tests {
         fs::write(workspace.join("sample.rs"), "fn sample() {}").expect("sample should be written");
         let database = WorkspaceDatabase::open_at(&workspace, &data).expect("database should open");
 
+        let initial_status = database.index_status().expect("status should be readable");
+        assert_eq!(initial_status.status, "not_indexed");
+        assert_eq!(initial_status.indexed_files, 0);
+
         database
             .replace_file_index(&index::scan(&workspace).expect("workspace should scan"))
             .expect("file index should be stored");
 
         assert_eq!(database.file_count(), 1);
+        let ready_status = database.index_status().expect("status should be readable");
+        assert_eq!(ready_status.status, "ready");
+        assert_eq!(ready_status.indexed_files, 1);
+        assert!(ready_status.last_full_index.is_some());
         assert_eq!(
             database
                 .search_files("sample", 10)

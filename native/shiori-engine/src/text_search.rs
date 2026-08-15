@@ -1,4 +1,5 @@
 use crate::index::DEFAULT_EXCLUSIONS;
+use globset::{Glob, GlobMatcher};
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
@@ -58,6 +59,16 @@ struct RipgrepSubmatch {
 
 pub fn search(root: &Path, request: &TextSearchRequest) -> Result<TextSearchResponse, String> {
     validate(request)?;
+    let glob = request
+        .glob
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .map(|pattern| {
+            Glob::new(pattern)
+                .map(|glob| glob.compile_matcher())
+                .map_err(|source| format!("invalid glob '{pattern}': {source}"))
+        })
+        .transpose()?;
     let root = root
         .canonicalize()
         .map_err(|source| format!("workspace is unavailable: {source}"))?;
@@ -87,9 +98,6 @@ pub fn search(root: &Path, request: &TextSearchRequest) -> Result<TextSearchResp
         });
     if !request.regex {
         command.arg("--fixed-strings");
-    }
-    if let Some(glob) = request.glob.as_deref().filter(|value| !value.is_empty()) {
-        command.arg("--glob").arg(glob);
     }
     for excluded in DEFAULT_EXCLUSIONS {
         command
@@ -132,7 +140,9 @@ pub fn search(root: &Path, request: &TextSearchRequest) -> Result<TextSearchResp
             continue;
         }
         if let Some(result) = convert_match(&root, message.data, request.context_lines)? {
-            results.push(result);
+            if matches_glob(glob.as_ref(), &result.path) {
+                results.push(result);
+            }
         }
         if results.len() >= request.limit {
             child
@@ -156,6 +166,13 @@ pub fn search(root: &Path, request: &TextSearchRequest) -> Result<TextSearchResp
         return Err(format!("ripgrep failed: {}", error.trim()));
     }
     Ok(TextSearchResponse { results })
+}
+
+fn matches_glob(glob: Option<&GlobMatcher>, path: &str) -> bool {
+    match glob {
+        Some(matcher) => matcher.is_match(path),
+        None => true,
+    }
 }
 
 fn validate(request: &TextSearchRequest) -> Result<(), String> {
@@ -286,7 +303,9 @@ mod tests {
             response
                 .results
                 .iter()
-                .all(|result| result.path == "sample.rs")
+                .all(|result| result.path == "sample.rs"),
+            "unexpected results: {:?}",
+            response.results
         );
         assert_eq!(response.results[0].line, 2);
         assert_eq!(response.results[0].column, 1);

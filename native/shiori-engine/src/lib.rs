@@ -9,7 +9,7 @@ mod database;
 mod index;
 mod text_search;
 
-use database::WorkspaceDatabase;
+use database::{IndexStatus, WorkspaceDatabase};
 
 const ABI_VERSION: u32 = 1;
 const STATUS_INVALID_ARGUMENT: i32 = 1;
@@ -70,10 +70,6 @@ pub unsafe extern "C" fn shiori_engine_open(
         database
             .validate()
             .map_err(|message| (STATUS_IO, message))?;
-        let files = index::scan(&root).map_err(|message| (STATUS_IO, message))?;
-        database
-            .replace_file_index(&files)
-            .map_err(|message| (STATUS_IO, message))?;
         unsafe { *handle = Box::into_raw(Box::new(Engine { root, database })).cast() };
         Ok(())
     })
@@ -131,12 +127,65 @@ pub unsafe extern "C" fn shiori_engine_search_files(
                 "query must not be empty".to_owned(),
             ));
         }
+        let status = engine
+            .database
+            .index_status()
+            .map_err(|message| (STATUS_IO, message))?;
+        if status.status != "ready" {
+            rebuild_index(engine)?;
+        }
         let matches = engine
             .database
             .search_files(&query, limit)
             .map_err(|message| (STATUS_IO, message))?;
         unsafe { *result = NativeBuffer::from_string(serialize_results(&matches)) };
         Ok(())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn shiori_engine_index_status(
+    handle: *mut c_void,
+    result: *mut NativeBuffer,
+    error: *mut NativeBuffer,
+) -> i32 {
+    ffi_boundary(error, || {
+        let engine = unsafe { engine_and_result(handle, result) }?;
+        write_index_status(engine.database.index_status(), result)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn shiori_engine_index_build(
+    handle: *mut c_void,
+    result: *mut NativeBuffer,
+    error: *mut NativeBuffer,
+) -> i32 {
+    ffi_boundary(error, || {
+        let engine = unsafe { engine_and_result(handle, result) }?;
+        let status = engine
+            .database
+            .index_status()
+            .map_err(|message| (STATUS_IO, message))?;
+        let status = if status.status == "ready" {
+            status
+        } else {
+            rebuild_index(engine)?
+        };
+        write_index_status(Ok(status), result)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn shiori_engine_index_rebuild(
+    handle: *mut c_void,
+    result: *mut NativeBuffer,
+    error: *mut NativeBuffer,
+) -> i32 {
+    ffi_boundary(error, || {
+        let engine = unsafe { engine_and_result(handle, result) }?;
+        let status = rebuild_index(engine)?;
+        write_index_status(Ok(status), result)
     })
 }
 
@@ -223,6 +272,46 @@ fn set_error(error: *mut NativeBuffer, message: String) {
     if !error.is_null() {
         unsafe { *error = NativeBuffer::from_string(message) };
     }
+}
+
+unsafe fn engine_and_result<'a>(
+    handle: *mut c_void,
+    result: *mut NativeBuffer,
+) -> Result<&'a Engine, (i32, String)> {
+    if handle.is_null() || result.is_null() {
+        return Err((
+            STATUS_INVALID_ARGUMENT,
+            "invalid index operation arguments".to_owned(),
+        ));
+    }
+    Ok(unsafe { &*handle.cast::<Engine>() })
+}
+
+fn rebuild_index(engine: &Engine) -> Result<IndexStatus, (i32, String)> {
+    let files = index::scan(&engine.root).map_err(|message| (STATUS_IO, message))?;
+    engine
+        .database
+        .replace_file_index(&files)
+        .map_err(|message| (STATUS_IO, message))?;
+    engine
+        .database
+        .index_status()
+        .map_err(|message| (STATUS_IO, message))
+}
+
+fn write_index_status(
+    status: Result<IndexStatus, String>,
+    result: *mut NativeBuffer,
+) -> Result<(), (i32, String)> {
+    let status = status.map_err(|message| (STATUS_IO, message))?;
+    let json = serde_json::to_string(&status).map_err(|source| {
+        (
+            STATUS_IO,
+            format!("cannot serialize index status: {source}"),
+        )
+    })?;
+    unsafe { *result = NativeBuffer::from_string(json) };
+    Ok(())
 }
 
 unsafe fn read_utf8<'a>(pointer: *const u8, length: usize) -> Result<&'a str, (i32, String)> {

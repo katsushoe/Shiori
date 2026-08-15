@@ -9,6 +9,15 @@ public interface IShioriEngine : IDisposable
     /// <summary>Gets persistent workspace registration information.</summary>
     WorkspaceInfo GetWorkspaceInfo();
 
+    /// <summary>Gets the current persistent file-index state.</summary>
+    IndexStatus GetIndexStatus();
+
+    /// <summary>Builds the file index when it is not ready.</summary>
+    IndexStatus BuildIndex();
+
+    /// <summary>Forces a full rebuild of the file index.</summary>
+    IndexStatus RebuildIndex();
+
     /// <summary>Searches file names and paths in the allowed workspace.</summary>
     IReadOnlyList<SearchResult> SearchFiles(string query, int limit = 20);
 
