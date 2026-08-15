@@ -37,6 +37,8 @@ dependency-directory exclusions. File-name searches lazily build and then use
 this persistent index. Running `index build` on a ready workspace performs an
 incremental scan: unchanged files are retained, content hashes confirm metadata
 changes, and only added, changed, or deleted files update SQLite and symbols.
+The MCP server watches allowed workspaces recursively and debounces bursts of
+create, modify, rename, and delete events into incremental index builds.
 
 The MCP server exposes `workspace_list`, `index_status`, `reindex`,
 `search_files`, `search_text`, `search_symbols`, and `file_outline`. `reindex` builds a missing

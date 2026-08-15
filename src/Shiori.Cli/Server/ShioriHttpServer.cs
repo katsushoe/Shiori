@@ -30,12 +30,22 @@ internal static class ShioriHttpServer
         var builder = WebApplication.CreateBuilder(options);
         builder.WebHost.ConfigureKestrel(server => server.Listen(IPAddress.Loopback, port));
         builder.Configuration["AllowedHosts"] = "localhost;127.0.0.1;[::1]";
-        builder.Services.AddSingleton(new NativeEngineRegistry(allowedWorkspaces));
+        builder.Services.AddSingleton(serviceProvider =>
+        {
+            var logger = serviceProvider.GetRequiredService<ILogger<NativeEngineRegistry>>();
+            return new NativeEngineRegistry(
+                allowedWorkspaces,
+                (workspace, exception) => logger.LogError(
+                    exception,
+                    "Incremental index watcher failed for {Workspace}",
+                    workspace));
+        });
         builder.Services.AddMcpServer()
             .WithHttpTransport(transport => transport.Stateless = true)
             .WithTools<ShioriTools>();
 
         var app = builder.Build();
+        _ = app.Services.GetRequiredService<NativeEngineRegistry>();
         app.UseHostFiltering();
         app.UseWhen(
             context => context.Request.Path.StartsWithSegments("/mcp"),

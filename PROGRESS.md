@@ -4,8 +4,8 @@
 
 ## 完成度
 
-- v1全体: **76%**（仕様書のv1完成条件21項目中16項目完了）
-- 現在のフェーズ: **Phase 2 — 80%**（5項目中4項目完了）
+- v1全体: **81%**（仕様書のv1完成条件21項目中17項目完了）
+- 現在のフェーズ: **Phase 2 — 100%**（5項目中5項目完了）
 
 ## Phase 2
 
@@ -13,21 +13,20 @@
 - [x] Symbol extraction
 - [x] SQLite FTS5
 - [x] Incremental index
-- [ ] File watcher
+- [x] File watcher
 
 ## v1完了済み
 
 MCP Streamable HTTP server、Workspace isolation、SQLite database、File index、
-ripgrep search、Tree-sitter parsing、Symbol index、SQLite FTS5、Incremental indexing、File search、
+ripgrep search、Tree-sitter parsing、Symbol index、SQLite FTS5、Incremental indexing、File watcher、File search、
 Text search、Symbol search、File outline、Index status、CLI、Windows support。
 
 ## v1残作業（優先順）
 
-1. File watcherと変更イベントのdebounce
-2. Generic search tool、Query Planner、統合Ranking
-3. Everything optional integration
-4. Claude Code integration
-5. Codex integration
+1. Generic search tool、Query Planner、統合Ranking
+2. Everything optional integration
+3. Claude Code integration
+4. Codex integration
 
 ## 算定基準
 
