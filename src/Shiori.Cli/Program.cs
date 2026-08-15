@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Shiori.Cli;
 using Shiori.Cli.Server;
+using Shiori.Core.Engine;
 using Shiori.Native;
 
 return Run(args);
@@ -21,6 +22,7 @@ static int Run(string[] arguments)
             "grep" => RunGrep(arguments[1..]),
             "index" => RunIndex(arguments[1..]),
             "outline" => RunOutline(arguments[1..]),
+            "symbol" => RunSymbol(arguments[1..]),
             "workspace" => RunWorkspace(arguments[1..]),
             "doctor" => DoctorRunner.Run(),
             "serve" => RunServer(arguments[1..]),
@@ -31,6 +33,24 @@ static int Run(string[] arguments)
     {
         return Fail(exception.Message);
     }
+}
+
+static int RunSymbol(string[] arguments)
+{
+    if (arguments.Length == 0) return Fail("symbol requires a query.");
+    var workspace = GetOption(arguments, "--allow")
+        ?? throw new ArgumentException("--allow is required.");
+    var limit = int.TryParse(GetOption(arguments, "--limit"), out var parsed) ? parsed : 20;
+    using var engine = NativeShioriEngine.Open(workspace);
+    var response = new SearchSymbolsResponse(engine.SearchSymbols(
+        arguments[0], GetOption(arguments, "--kind"), GetOption(arguments, "--language"),
+        GetOption(arguments, "--path"), limit));
+    Console.WriteLine(JsonSerializer.Serialize(response, new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        WriteIndented = true,
+    }));
+    return 0;
 }
 
 static int RunOutline(string[] arguments)
@@ -167,6 +187,8 @@ static string Usage() => """
       shiori index status --allow <directory>
       shiori index rebuild --allow <directory>
       shiori outline <source-file> --allow <directory>
+      shiori symbol <query> --allow <directory> [--kind <kind>] [--language <language>]
+        [--path <path>] [--limit <1-100>]
       shiori workspace add <absolute-directory>
       shiori workspace list
       shiori workspace remove <name-or-id-or-absolute-directory>

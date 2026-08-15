@@ -13,7 +13,7 @@ mod symbols;
 mod text_search;
 
 use database::{IndexStatus, WorkspaceDatabase};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 const ABI_VERSION: u32 = 1;
 const STATUS_INVALID_ARGUMENT: i32 = 1;
@@ -38,6 +38,15 @@ struct RuntimeDiagnostics {
     ripgrep_version: Option<String>,
     tree_sitter_version: &'static str,
     tree_sitter_languages: &'static [&'static str],
+}
+
+#[derive(Deserialize)]
+struct SymbolSearchRequest {
+    query: String,
+    kind: Option<String>,
+    language: Option<String>,
+    path: Option<String>,
+    limit: usize,
 }
 
 impl NativeBuffer {
@@ -277,6 +286,57 @@ pub unsafe extern "C" fn shiori_engine_search_text(
             (
                 STATUS_IO,
                 format!("cannot serialize text search response: {source}"),
+            )
+        })?;
+        unsafe { *result = NativeBuffer::from_string(json) };
+        Ok(())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn shiori_engine_search_symbols(
+    handle: *mut c_void,
+    request: *const u8,
+    request_length: usize,
+    result: *mut NativeBuffer,
+    error: *mut NativeBuffer,
+) -> i32 {
+    ffi_boundary(error, || {
+        if handle.is_null() || result.is_null() {
+            return Err((
+                STATUS_INVALID_ARGUMENT,
+                "invalid symbol search arguments".to_owned(),
+            ));
+        }
+        let engine = unsafe { &*handle.cast::<Engine>() };
+        let request = unsafe { read_utf8(request, request_length) }?;
+        let request: SymbolSearchRequest = serde_json::from_str(request).map_err(|source| {
+            (
+                STATUS_INVALID_ARGUMENT,
+                format!("invalid symbol search request: {source}"),
+            )
+        })?;
+        if request.query.trim().is_empty() || !(1..=100).contains(&request.limit) {
+            return Err((
+                STATUS_INVALID_ARGUMENT,
+                "query must not be empty and limit must be from 1 to 100".to_owned(),
+            ));
+        }
+        ensure_index(engine)?;
+        let response = engine
+            .database
+            .search_symbols(
+                request.query.trim(),
+                request.kind.as_deref(),
+                request.language.as_deref(),
+                request.path.as_deref(),
+                request.limit,
+            )
+            .map_err(|message| (STATUS_IO, message))?;
+        let json = serde_json::to_string(&response).map_err(|source| {
+            (
+                STATUS_IO,
+                format!("cannot serialize symbol search response: {source}"),
             )
         })?;
         unsafe { *result = NativeBuffer::from_string(json) };

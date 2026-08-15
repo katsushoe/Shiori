@@ -83,4 +83,21 @@ internal sealed class ShioriTools
         return new SearchFilesResponse(
             engine.SearchText(query, path, glob, regex, caseSensitive, contextLines, limit));
     }
+
+    [McpServerTool(Name = "search_symbols", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Searches indexed source symbols using SQLite FTS5 with optional filters.")]
+    public static SearchSymbolsResponse SearchSymbols(
+        [Description("Symbol name or qualified-name prefix to search for.")] string query,
+        [Description("Absolute path of the allowed workspace.")] string workspace,
+        NativeEngineRegistry registry,
+        [Description("Optional exact symbol kind, such as function or method.")] string? kind = null,
+        [Description("Optional exact language name, such as rust or c_sharp.")] string? language = null,
+        [Description("Optional relative path fragment.")] string? path = null,
+        [Description("Maximum number of results from 1 to 100.")] int limit = 20,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return new SearchSymbolsResponse(
+            registry.GetEngine(workspace).SearchSymbols(query, kind, language, path, limit));
+    }
 }

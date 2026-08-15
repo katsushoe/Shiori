@@ -62,6 +62,25 @@ pub struct OutlineSymbol {
     pub children: Vec<OutlineSymbol>,
 }
 
+#[derive(Serialize)]
+pub struct SymbolSearchResponse {
+    pub results: Vec<SymbolSearchResult>,
+}
+
+#[derive(Serialize)]
+pub struct SymbolSearchResult {
+    pub r#type: &'static str,
+    pub name: String,
+    pub qualified_name: Option<String>,
+    pub kind: String,
+    pub language: String,
+    pub path: String,
+    pub line: i64,
+    pub column: i64,
+    pub score: f64,
+    pub signature: Option<String>,
+}
+
 struct StoredSymbol {
     id: i64,
     parent_id: Option<i64>,
@@ -300,6 +319,76 @@ impl WorkspaceDatabase {
                 .map_err(|source| format!("cannot read file search result: {source}"))
         })
         .collect()
+    }
+
+    pub fn search_symbols(
+        &self,
+        query: &str,
+        kind: Option<&str>,
+        language: Option<&str>,
+        path: Option<&str>,
+        limit: usize,
+    ) -> Result<SymbolSearchResponse, String> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "workspace database lock is poisoned".to_owned())?;
+        let fts_query = format!("\"{}\"*", query.replace('"', "\"\""));
+        let path_pattern = path.map(|value| format!("%{}%", escape_like(value)));
+        let mut statement = connection
+            .prepare(
+                "SELECT symbols.name, symbols.qualified_name, symbols.kind, symbols.language,
+                        files.relative_path, symbols.start_line, symbols.start_column,
+                        CASE
+                            WHEN symbols.name = ?2 COLLATE NOCASE THEN 1.0
+                            WHEN symbols.name LIKE (?2 || '%') ESCAPE '\\' COLLATE NOCASE THEN 0.9
+                            ELSE 0.7
+                        END AS score,
+                        symbols.signature
+                 FROM symbols_fts
+                 JOIN symbols ON symbols.id = symbols_fts.rowid
+                 JOIN files ON files.id = symbols.file_id
+                 WHERE symbols_fts MATCH ?1
+                   AND symbols.workspace_id = ?3
+                   AND (?4 IS NULL OR symbols.kind = ?4 COLLATE NOCASE)
+                   AND (?5 IS NULL OR symbols.language = ?5 COLLATE NOCASE)
+                   AND (?6 IS NULL OR files.relative_path LIKE ?6 ESCAPE '\\' COLLATE NOCASE)
+                 ORDER BY score DESC, bm25(symbols_fts), symbols.name COLLATE NOCASE,
+                          files.relative_path COLLATE NOCASE, symbols.start_line
+                 LIMIT ?7",
+            )
+            .map_err(|source| format!("cannot prepare symbol search: {source}"))?;
+        let rows = statement
+            .query_map(
+                params![
+                    fts_query,
+                    query,
+                    self.info.id,
+                    kind,
+                    language,
+                    path_pattern,
+                    limit as i64
+                ],
+                |row| {
+                    Ok(SymbolSearchResult {
+                        r#type: "symbol",
+                        name: row.get(0)?,
+                        qualified_name: row.get(1)?,
+                        kind: row.get(2)?,
+                        language: row.get(3)?,
+                        path: row.get(4)?,
+                        line: row.get(5)?,
+                        column: row.get(6)?,
+                        score: row.get(7)?,
+                        signature: row.get(8)?,
+                    })
+                },
+            )
+            .map_err(|source| format!("cannot search symbols: {source}"))?;
+        let results = rows
+            .map(|row| row.map_err(|source| format!("cannot read symbol search result: {source}")))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(SymbolSearchResponse { results })
     }
 
     pub fn file_outline(&self, relative_path: &str) -> Result<FileOutline, String> {
@@ -684,6 +773,20 @@ mod tests {
         assert_eq!(outline.symbols.len(), 1);
         assert_eq!(outline.symbols[0].name, "sample");
         assert_eq!(outline.symbols[0].kind, "function");
+        let symbols = database
+            .search_symbols("sam", None, None, Some("sample"), 10)
+            .expect("symbol search should succeed");
+        assert_eq!(symbols.results.len(), 1);
+        assert_eq!(symbols.results[0].name, "sample");
+        assert_eq!(symbols.results[0].language, "rust");
+        assert_eq!(symbols.results[0].score, 0.9);
+        assert!(
+            database
+                .search_symbols("sample", Some("method"), None, None, 10)
+                .expect("filtered symbol search should succeed")
+                .results
+                .is_empty()
+        );
         let ready_status = database.index_status().expect("status should be readable");
         assert_eq!(ready_status.status, "ready");
         assert_eq!(ready_status.indexed_files, 1);

@@ -24,6 +24,14 @@ public interface IShioriEngine : IDisposable
     /// <summary>Searches file names and paths in the allowed workspace.</summary>
     IReadOnlyList<SearchResult> SearchFiles(string query, int limit = 20);
 
+    /// <summary>Searches indexed source symbols with optional filters.</summary>
+    IReadOnlyList<SymbolSearchResult> SearchSymbols(
+        string query,
+        string? kind = null,
+        string? language = null,
+        string? path = null,
+        int limit = 20);
+
     /// <summary>Searches workspace file contents through ripgrep.</summary>
     IReadOnlyList<SearchResult> SearchText(
         string query,

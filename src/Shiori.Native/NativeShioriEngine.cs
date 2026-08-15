@@ -193,6 +193,40 @@ public sealed class NativeShioriEngine : IShioriEngine
     }
 
     /// <inheritdoc />
+    public unsafe IReadOnlyList<SymbolSearchResult> SearchSymbols(
+        string query,
+        string? kind = null,
+        string? language = null,
+        string? path = null,
+        int limit = 20)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentException.ThrowIfNullOrWhiteSpace(query);
+        ArgumentOutOfRangeException.ThrowIfLessThan(limit, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(limit, 100);
+        var request = JsonSerializer.Serialize(new { query, kind, language, path, limit }, JsonOptions);
+        var bytes = Encoding.UTF8.GetBytes(request);
+        fixed (byte* pointer = bytes)
+        {
+            var status = NativeAbi.SearchSymbols(
+                _handle, pointer, (nuint)bytes.Length, out var result, out var error);
+            if (status != 0)
+            {
+                throw CreateException(error, "Native symbol search failed.");
+            }
+            try
+            {
+                return JsonSerializer.Deserialize<SearchSymbolsResponse>(ReadBuffer(result), JsonOptions)?.Results
+                    ?? throw new ShioriEngineException("Native engine returned an invalid symbol search response.");
+            }
+            finally
+            {
+                NativeAbi.FreeBuffer(result);
+            }
+        }
+    }
+
+    /// <inheritdoc />
     public void Dispose()
     {
         if (_disposed) return;
