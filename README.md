@@ -27,10 +27,13 @@ list of absolute workspace paths before starting it.
 
 Opening a configured workspace creates its SQLite database under the platform
 data directory (`%LOCALAPPDATA%\Shiori\indexes\<workspace-id>\shiori.db` on
-Windows), scans file metadata into the database, and honors `.gitignore` plus
-Shiori's default build and dependency-directory exclusions. File-name searches
-run against this persistent index. The `workspace_list` MCP Tool returns
-registration and schema status.
+Windows). File indexing honors `.gitignore` plus Shiori's default build and
+dependency-directory exclusions. File-name searches lazily build and then use
+this persistent index.
+
+The MCP server exposes `workspace_list`, `index_status`, `reindex`,
+`search_files`, and `search_text`. `reindex` builds a missing index by default;
+set `force` to `true` to run a full rescan.
 
 Set `SHIORI_EXCLUDE_PATTERNS` to semicolon-separated gitignore-style glob
 patterns (for example, `generated/**;*.min.js`) to add workspace exclusions.

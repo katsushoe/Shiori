@@ -14,6 +14,30 @@ internal sealed class ShioriTools
         return registry.ListWorkspaces();
     }
 
+    [McpServerTool(Name = "index_status", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Returns the persistent file-index state for an allowed workspace.")]
+    public static IndexStatus GetIndexStatus(
+        [Description("Absolute path of the allowed workspace.")] string workspace,
+        NativeEngineRegistry registry,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return registry.GetEngine(workspace).GetIndexStatus();
+    }
+
+    [McpServerTool(Name = "reindex", ReadOnly = false, Idempotent = true, OpenWorld = false)]
+    [Description("Builds or forcibly rebuilds the persistent file index for an allowed workspace.")]
+    public static IndexStatus Reindex(
+        [Description("Absolute path of the allowed workspace.")] string workspace,
+        NativeEngineRegistry registry,
+        [Description("Force a full rescan even when the index is ready.")] bool force = false,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var engine = registry.GetEngine(workspace);
+        return force ? engine.RebuildIndex() : engine.BuildIndex();
+    }
+
     [McpServerTool(Name = "search_files", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Searches file names and paths in a local Shiori workspace.")]
     public static SearchFilesResponse SearchFiles(
