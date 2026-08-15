@@ -34,7 +34,9 @@ Opening a configured workspace creates its SQLite database under the platform
 data directory (`%LOCALAPPDATA%\Shiori\indexes\<workspace-id>\shiori.db` on
 Windows). File indexing honors `.gitignore` plus Shiori's default build and
 dependency-directory exclusions. File-name searches lazily build and then use
-this persistent index.
+this persistent index. Running `index build` on a ready workspace performs an
+incremental scan: unchanged files are retained, content hashes confirm metadata
+changes, and only added, changed, or deleted files update SQLite and symbols.
 
 The MCP server exposes `workspace_list`, `index_status`, `reindex`,
 `search_files`, `search_text`, `search_symbols`, and `file_outline`. `reindex` builds a missing

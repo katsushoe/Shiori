@@ -235,7 +235,7 @@ pub unsafe extern "C" fn shiori_engine_index_build(
             .index_status()
             .map_err(|message| (STATUS_IO, message))?;
         let status = if status.status == "ready" {
-            status
+            incremental_index(engine)?
         } else {
             rebuild_index(engine)?
         };
@@ -450,6 +450,23 @@ fn rebuild_index(engine: &Engine) -> Result<IndexStatus, (i32, String)> {
     engine
         .database
         .replace_file_index(&files)
+        .map_err(|message| (STATUS_IO, message))?;
+    engine
+        .database
+        .index_status()
+        .map_err(|message| (STATUS_IO, message))
+}
+
+fn incremental_index(engine: &Engine) -> Result<IndexStatus, (i32, String)> {
+    let previous = engine
+        .database
+        .file_fingerprints()
+        .map_err(|message| (STATUS_IO, message))?;
+    let scan =
+        index::scan_incremental(&engine.root, &previous).map_err(|message| (STATUS_IO, message))?;
+    engine
+        .database
+        .apply_incremental_index(&scan)
         .map_err(|message| (STATUS_IO, message))?;
     engine
         .database

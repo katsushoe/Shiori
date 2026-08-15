@@ -1,7 +1,8 @@
 use crate::index::IndexedFile;
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::fmt::Write;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -165,12 +166,13 @@ impl WorkspaceDatabase {
             transaction
                 .execute(
                     "INSERT INTO files
-                     (workspace_id, path, relative_path, extension, language, size, mtime, indexed_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                     (workspace_id, path, relative_path, extension, language, size, mtime, content_hash, indexed_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
                      ON CONFLICT(workspace_id, relative_path) DO UPDATE SET
                          path = excluded.path, extension = excluded.extension,
                          language = excluded.language, size = excluded.size,
-                         mtime = excluded.mtime, indexed_at = excluded.indexed_at",
+                         mtime = excluded.mtime, content_hash = excluded.content_hash,
+                         indexed_at = excluded.indexed_at",
                     params![
                         self.info.id,
                         file.absolute_path,
@@ -178,7 +180,8 @@ impl WorkspaceDatabase {
                         file.extension,
                         file.language,
                         file.size,
-                        file.mtime
+                        file.mtime,
+                        file.content_hash
                     ],
                 )
                 .and_then(|_| {
@@ -294,6 +297,107 @@ impl WorkspaceDatabase {
                 },
             )
             .map_err(|source| format!("cannot read index status: {source}"))
+    }
+
+    pub fn file_fingerprints(
+        &self,
+    ) -> Result<HashMap<String, crate::index::FileFingerprint>, String> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "workspace database lock is poisoned".to_owned())?;
+        let mut statement = connection
+            .prepare("SELECT relative_path, size, mtime, content_hash FROM files WHERE workspace_id = ?1")
+            .map_err(|source| format!("cannot prepare file fingerprint query: {source}"))?;
+        let rows = statement
+            .query_map(params![self.info.id], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    crate::index::FileFingerprint {
+                        size: row.get(1)?,
+                        mtime: row.get(2)?,
+                        content_hash: row.get(3)?,
+                    },
+                ))
+            })
+            .map_err(|source| format!("cannot read file fingerprints: {source}"))?;
+        rows.map(|row| row.map_err(|source| format!("cannot read file fingerprint: {source}")))
+            .collect()
+    }
+
+    pub fn apply_incremental_index(
+        &self,
+        scan: &crate::index::IncrementalScan,
+    ) -> Result<(), String> {
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| "workspace database lock is poisoned".to_owned())?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| format!("cannot start incremental index update: {source}"))?;
+        transaction
+            .execute_batch("CREATE TEMP TABLE current_paths (relative_path TEXT PRIMARY KEY);")
+            .map_err(|source| format!("cannot initialize incremental index update: {source}"))?;
+        for path in &scan.current_paths {
+            transaction
+                .execute(
+                    "INSERT INTO current_paths (relative_path) VALUES (?1)",
+                    params![path],
+                )
+                .map_err(|source| format!("cannot track current indexed path: {source}"))?;
+        }
+        for update in &scan.metadata_updates {
+            transaction
+                .execute(
+                    "UPDATE files SET path = ?3, size = ?4, mtime = ?5,
+                         indexed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                     WHERE workspace_id = ?1 AND relative_path = ?2",
+                    params![
+                        self.info.id,
+                        update.relative_path,
+                        update.absolute_path,
+                        update.size,
+                        update.mtime
+                    ],
+                )
+                .map_err(|source| format!("cannot update unchanged file metadata: {source}"))?;
+        }
+        for file in &scan.upserts {
+            store_file(&transaction, &self.info.id, file)?;
+        }
+        let deleted = transaction
+            .execute(
+                "DELETE FROM files WHERE workspace_id = ?1
+                 AND relative_path NOT IN (SELECT relative_path FROM current_paths)",
+                params![self.info.id],
+            )
+            .map_err(|source| format!("cannot delete removed indexed files: {source}"))?;
+        transaction
+            .execute(
+                "UPDATE workspaces SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                     last_indexed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?1",
+                params![self.info.id],
+            )
+            .and_then(|_| {
+                transaction.execute(
+                    "UPDATE index_state SET last_scan = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                         parser_version = ?2, status = 'ready' WHERE workspace_id = ?1",
+                    params![self.info.id, crate::languages::PARSER_VERSION],
+                )
+            })
+            .map_err(|source| format!("cannot finalize incremental index state: {source}"))?;
+        if !scan.upserts.is_empty() || deleted > 0 {
+            transaction
+                .execute("INSERT INTO symbols_fts(symbols_fts) VALUES('rebuild')", [])
+                .map_err(|source| format!("cannot rebuild symbol search index: {source}"))?;
+        }
+        transaction
+            .execute("DROP TABLE current_paths", [])
+            .map_err(|source| format!("cannot finalize incremental index update: {source}"))?;
+        transaction
+            .commit()
+            .map_err(|source| format!("cannot commit incremental index update: {source}"))
     }
 
     pub fn search_files(&self, query: &str, limit: usize) -> Result<Vec<PathBuf>, String> {
@@ -462,6 +566,67 @@ impl WorkspaceDatabase {
             .query_row("SELECT count(*) FROM symbols", [], |row| row.get(0))
             .expect("symbol count should be readable")
     }
+}
+
+fn store_file(
+    transaction: &Transaction<'_>,
+    workspace_id: &str,
+    file: &IndexedFile,
+) -> Result<(), String> {
+    transaction
+        .execute(
+            "INSERT INTO files
+             (workspace_id, path, relative_path, extension, language, size, mtime, content_hash, indexed_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+             ON CONFLICT(workspace_id, relative_path) DO UPDATE SET
+                 path = excluded.path, extension = excluded.extension, language = excluded.language,
+                 size = excluded.size, mtime = excluded.mtime, content_hash = excluded.content_hash,
+                 indexed_at = excluded.indexed_at",
+            params![workspace_id, file.absolute_path, file.relative_path, file.extension,
+                file.language, file.size, file.mtime, file.content_hash],
+        )
+        .map_err(|source| format!("cannot update indexed file: {source}"))?;
+    let file_id: i64 = transaction
+        .query_row(
+            "SELECT id FROM files WHERE workspace_id = ?1 AND relative_path = ?2",
+            params![workspace_id, file.relative_path],
+            |row| row.get(0),
+        )
+        .map_err(|source| format!("cannot resolve indexed file: {source}"))?;
+    transaction
+        .execute("DELETE FROM symbols WHERE file_id = ?1", params![file_id])
+        .map_err(|source| format!("cannot replace file symbols: {source}"))?;
+    let mut symbol_ids = Vec::with_capacity(file.symbols.len());
+    for symbol in &file.symbols {
+        let parent_id = symbol
+            .parent_index
+            .and_then(|index| symbol_ids.get(index))
+            .copied();
+        transaction
+            .execute(
+                "INSERT INTO symbols
+                 (workspace_id, file_id, name, qualified_name, kind, language,
+                  start_line, start_column, end_line, end_column, parent_symbol_id, signature)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                params![
+                    workspace_id,
+                    file_id,
+                    symbol.name,
+                    symbol.qualified_name,
+                    symbol.kind,
+                    symbol.language,
+                    symbol.start_line,
+                    symbol.start_column,
+                    symbol.end_line,
+                    symbol.end_column,
+                    parent_id,
+                    symbol.signature
+                ],
+            )
+            .map_err(|source| format!("cannot store file symbol: {source}"))?;
+        symbol_ids.push(transaction.last_insert_rowid());
+    }
+    Ok(())
 }
 
 fn outline_children(symbols: &[StoredSymbol], parent_id: Option<i64>) -> Vec<OutlineSymbol> {
@@ -802,6 +967,48 @@ mod tests {
                 .expect("search should succeed"),
             vec![PathBuf::from("sample.rs")]
         );
+
+        let unchanged = index::scan_incremental(
+            &workspace,
+            &database
+                .file_fingerprints()
+                .expect("fingerprints should be readable"),
+        )
+        .expect("unchanged workspace should scan");
+        assert!(unchanged.upserts.is_empty());
+        assert!(unchanged.metadata_updates.is_empty());
+
+        fs::write(workspace.join("sample.rs"), "fn changed_symbol() {}")
+            .expect("sample should change");
+        let changed = index::scan_incremental(
+            &workspace,
+            &database
+                .file_fingerprints()
+                .expect("fingerprints should be readable"),
+        )
+        .expect("changed workspace should scan");
+        assert_eq!(changed.upserts.len(), 1);
+        database
+            .apply_incremental_index(&changed)
+            .expect("incremental update should be stored");
+        let changed_outline = database
+            .file_outline("sample.rs")
+            .expect("changed outline should exist");
+        assert_eq!(changed_outline.symbols[0].name, "changed_symbol");
+
+        fs::remove_file(workspace.join("sample.rs")).expect("sample should be removed");
+        let deleted = index::scan_incremental(
+            &workspace,
+            &database
+                .file_fingerprints()
+                .expect("fingerprints should be readable"),
+        )
+        .expect("deleted workspace should scan");
+        database
+            .apply_incremental_index(&deleted)
+            .expect("deletion should be stored");
+        assert_eq!(database.file_count(), 0);
+        assert_eq!(database.symbol_count(), 0);
         drop(database);
         fs::remove_dir_all(test_root).expect("test directory should be removed");
     }

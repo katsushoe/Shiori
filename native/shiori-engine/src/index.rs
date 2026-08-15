@@ -2,6 +2,8 @@ use crate::languages;
 use crate::symbols::{self, ExtractedSymbol};
 use ignore::overrides::OverrideBuilder;
 use ignore::{DirEntry, WalkBuilder};
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 
@@ -28,7 +30,28 @@ pub struct IndexedFile {
     pub language: Option<&'static str>,
     pub size: i64,
     pub mtime: i64,
+    pub content_hash: String,
     pub symbols: Vec<ExtractedSymbol>,
+}
+
+#[derive(Clone)]
+pub struct FileFingerprint {
+    pub size: i64,
+    pub mtime: i64,
+    pub content_hash: Option<String>,
+}
+
+pub struct MetadataUpdate {
+    pub relative_path: String,
+    pub absolute_path: String,
+    pub size: i64,
+    pub mtime: i64,
+}
+
+pub struct IncrementalScan {
+    pub upserts: Vec<IndexedFile>,
+    pub metadata_updates: Vec<MetadataUpdate>,
+    pub current_paths: Vec<String>,
 }
 
 pub fn scan(root: &Path) -> Result<Vec<IndexedFile>, String> {
@@ -42,6 +65,90 @@ pub fn scan(root: &Path) -> Result<Vec<IndexedFile>, String> {
 }
 
 fn scan_with_patterns(root: &Path, patterns: &[&str]) -> Result<Vec<IndexedFile>, String> {
+    let entries = walk(root, patterns)?;
+    entries
+        .into_iter()
+        .map(|entry| {
+            index_file(
+                &entry.path,
+                &entry.relative_path,
+                entry.size,
+                entry.mtime,
+                None,
+            )
+        })
+        .collect()
+}
+
+pub fn scan_incremental(
+    root: &Path,
+    previous: &HashMap<String, FileFingerprint>,
+) -> Result<IncrementalScan, String> {
+    let configured = std::env::var("SHIORI_EXCLUDE_PATTERNS").unwrap_or_default();
+    let patterns = configured
+        .split(';')
+        .map(str::trim)
+        .filter(|pattern| !pattern.is_empty())
+        .collect::<Vec<_>>();
+    let entries = walk(root, &patterns)?;
+    let mut scan = IncrementalScan {
+        upserts: Vec::new(),
+        metadata_updates: Vec::new(),
+        current_paths: Vec::with_capacity(entries.len()),
+    };
+    for entry in entries {
+        scan.current_paths.push(entry.relative_path.clone());
+        let Some(previous) = previous.get(&entry.relative_path) else {
+            scan.upserts.push(index_file(
+                &entry.path,
+                &entry.relative_path,
+                entry.size,
+                entry.mtime,
+                None,
+            )?);
+            continue;
+        };
+        if previous.size == entry.size
+            && previous.mtime == entry.mtime
+            && previous.content_hash.is_some()
+        {
+            continue;
+        }
+        let source = std::fs::read(&entry.path).map_err(|error| {
+            format!(
+                "cannot read source file '{}': {error}",
+                entry.path.display()
+            )
+        })?;
+        let content_hash = content_hash(&source);
+        if previous.content_hash.as_deref() == Some(&content_hash) {
+            scan.metadata_updates.push(MetadataUpdate {
+                relative_path: entry.relative_path,
+                absolute_path: normalize_path(&entry.path),
+                size: entry.size,
+                mtime: entry.mtime,
+            });
+        } else {
+            scan.upserts.push(index_file(
+                &entry.path,
+                &entry.relative_path,
+                entry.size,
+                entry.mtime,
+                Some(source),
+            )?);
+        }
+    }
+    Ok(scan)
+}
+
+struct WalkedFile {
+    path: std::path::PathBuf,
+    relative_path: String,
+    size: i64,
+    mtime: i64,
+}
+
+fn walk(root: &Path, patterns: &[&str]) -> Result<Vec<WalkedFile>, String> {
     let mut builder = WalkBuilder::new(root);
     builder
         .follow_links(false)
@@ -81,34 +188,60 @@ fn scan_with_patterns(root: &Path, patterns: &[&str]) -> Result<Vec<IndexedFile>
         let metadata = entry
             .metadata()
             .map_err(|source| format!("cannot read file metadata: {source}"))?;
-        let extension = path
-            .extension()
-            .and_then(|value| value.to_str())
-            .map(str::to_lowercase);
-        let language = languages::detect(path);
-        let symbols = if let Some(language) = language {
-            let source = std::fs::read(path).map_err(|error| {
-                format!("cannot read source file '{}': {error}", path.display())
-            })?;
-            let tree = languages::parse(language, &source).map_err(|error| {
-                format!("cannot parse source file '{}': {error}", path.display())
-            })?;
-            symbols::extract(language, &source, &tree)
-        } else {
-            Vec::new()
-        };
-        files.push(IndexedFile {
-            absolute_path: normalize_path(path),
+        files.push(WalkedFile {
+            path: path.to_path_buf(),
             relative_path: normalize_path(relative),
-            language: language.map(|value| value.name()),
-            extension,
             size: i64::try_from(metadata.len()).unwrap_or(i64::MAX),
             mtime: modified_time(&metadata),
-            symbols,
         });
     }
     files.sort_unstable_by(|left, right| left.relative_path.cmp(&right.relative_path));
     Ok(files)
+}
+
+fn index_file(
+    path: &Path,
+    relative_path: &str,
+    size: i64,
+    mtime: i64,
+    source: Option<Vec<u8>>,
+) -> Result<IndexedFile, String> {
+    let source = match source {
+        Some(value) => value,
+        None => std::fs::read(path)
+            .map_err(|error| format!("cannot read source file '{}': {error}", path.display()))?,
+    };
+    let language = languages::detect(path);
+    let symbols = if let Some(language) = language {
+        let tree = languages::parse(language, &source)
+            .map_err(|error| format!("cannot parse source file '{}': {error}", path.display()))?;
+        symbols::extract(language, &source, &tree)
+    } else {
+        Vec::new()
+    };
+    Ok(IndexedFile {
+        absolute_path: normalize_path(path),
+        relative_path: relative_path.to_owned(),
+        extension: path
+            .extension()
+            .and_then(|value| value.to_str())
+            .map(str::to_lowercase),
+        language: language.map(|value| value.name()),
+        size,
+        mtime,
+        content_hash: content_hash(&source),
+        symbols,
+    })
+}
+
+fn content_hash(source: &[u8]) -> String {
+    Sha256::digest(source)
+        .iter()
+        .fold(String::with_capacity(64), |mut output, byte| {
+            use std::fmt::Write;
+            write!(output, "{byte:02x}").expect("writing to String cannot fail");
+            output
+        })
 }
 
 fn is_excluded(entry: &DirEntry) -> bool {
@@ -126,7 +259,7 @@ fn modified_time(metadata: &std::fs::Metadata) -> i64 {
         .modified()
         .ok()
         .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
-        .and_then(|value| i64::try_from(value.as_secs()).ok())
+        .and_then(|value| i64::try_from(value.as_nanos()).ok())
         .unwrap_or_default()
 }
 
