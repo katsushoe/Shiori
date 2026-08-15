@@ -356,6 +356,9 @@ fn register_workspace(
 }
 
 fn platform_data_root() -> Result<PathBuf, String> {
+    if let Some(path) = std::env::var_os("SHIORI_DATA_HOME") {
+        return Ok(PathBuf::from(path));
+    }
     if cfg!(target_os = "windows") {
         return std::env::var_os("LOCALAPPDATA")
             .map(PathBuf::from)

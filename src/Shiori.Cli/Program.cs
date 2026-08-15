@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Shiori.Cli;
 using Shiori.Cli.Server;
 using Shiori.Native;
 
@@ -19,6 +20,7 @@ static int Run(string[] arguments)
             "find" => RunFind(arguments[1..]),
             "grep" => RunGrep(arguments[1..]),
             "index" => RunIndex(arguments[1..]),
+            "workspace" => RunWorkspace(arguments[1..]),
             "doctor" => RunDoctor(),
             "serve" => RunServer(arguments[1..]),
             _ => Fail($"Unknown command: {arguments[0]}")
@@ -28,6 +30,27 @@ static int Run(string[] arguments)
     {
         return Fail(exception.Message);
     }
+}
+
+static int RunWorkspace(string[] arguments)
+{
+    if (arguments.Length == 0) return Fail("workspace requires add, list, or remove.");
+    var registry = new WorkspaceRegistry();
+    object response = arguments[0] switch
+    {
+        "add" when arguments.Length >= 2 => registry.Add(arguments[1]),
+        "list" => new { workspaces = registry.List() },
+        "remove" when arguments.Length >= 2 => registry.Remove(arguments[1]),
+        "add" => throw new ArgumentException("workspace add requires an absolute directory."),
+        "remove" => throw new ArgumentException("workspace remove requires a name, ID, or absolute directory."),
+        _ => throw new ArgumentException($"Unknown workspace command: {arguments[0]}")
+    };
+    Console.WriteLine(JsonSerializer.Serialize(response, new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        WriteIndented = true,
+    }));
+    return 0;
 }
 
 static int RunIndex(string[] arguments)
@@ -134,6 +157,9 @@ static string Usage() => """
       shiori index build --allow <directory>
       shiori index status --allow <directory>
       shiori index rebuild --allow <directory>
+      shiori workspace add <absolute-directory>
+      shiori workspace list
+      shiori workspace remove <name-or-id-or-absolute-directory>
       shiori doctor
       shiori serve [--port <1-65535>]
     """;

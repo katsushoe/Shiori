@@ -16,6 +16,9 @@ dotnet run --project src/Shiori.Cli -- grep <query> --allow <directory> [--glob 
 dotnet run --project src/Shiori.Cli -- index build --allow <directory>
 dotnet run --project src/Shiori.Cli -- index status --allow <directory>
 dotnet run --project src/Shiori.Cli -- index rebuild --allow <directory>
+dotnet run --project src/Shiori.Cli -- workspace add <absolute-directory>
+dotnet run --project src/Shiori.Cli -- workspace list
+dotnet run --project src/Shiori.Cli -- workspace remove <name-or-id-or-absolute-directory>
 dotnet run --project src/Shiori.Cli -- doctor
 dotnet run --project src/Shiori.Cli -- serve --port 39473
 ```
@@ -34,6 +37,14 @@ this persistent index.
 The MCP server exposes `workspace_list`, `index_status`, `reindex`,
 `search_files`, and `search_text`. `reindex` builds a missing index by default;
 set `force` to `true` to run a full rescan.
+
+CLI workspace registrations are stored in the current user's local application
+data directory. Removing a registration preserves its SQLite index database.
+Registrations do not grant MCP access; `SHIORI_ALLOWED_WORKSPACES` remains the
+server authorization boundary.
+
+Set `SHIORI_DATA_HOME` to override the shared workspace-registry and index-data
+directory, for example when running Shiori in an isolated environment.
 
 Set `SHIORI_EXCLUDE_PATTERNS` to semicolon-separated gitignore-style glob
 patterns (for example, `generated/**;*.min.js`) to add workspace exclusions.
