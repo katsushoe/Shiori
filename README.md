@@ -44,6 +44,10 @@ The MCP server exposes `workspace_list`, `index_status`, `reindex`,
 `search_files`, `search_text`, `search_symbols`, and `file_outline`. `reindex` builds a missing
 index by default; set `force` to `true` to run a full rescan.
 
+The managed query planner classifies file paths, code identifiers, quoted text,
+and reference or implementation intent into deterministic file, symbol, and
+text-provider plans. The unified `search` tool will consume these plans.
+
 CLI workspace registrations are stored in the current user's local application
 data directory. Removing a registration preserves its SQLite index database.
 Registrations do not grant MCP access; `SHIORI_ALLOWED_WORKSPACES` remains the

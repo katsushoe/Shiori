@@ -5,15 +5,22 @@
 ## 完成度
 
 - v1全体: **81%**（仕様書のv1完成条件21項目中17項目完了）
-- 現在のフェーズ: **Phase 2 — 100%**（5項目中5項目完了）
+- 現在のフェーズ: **Phase 3 — 25%**（4項目中1項目完了）
 
-## Phase 2
+## Phase 2（完了）
 
 - [x] Tree-sitter
 - [x] Symbol extraction
 - [x] SQLite FTS5
 - [x] Incremental index
 - [x] File watcher
+
+## Phase 3
+
+- [x] Query Planner
+- [ ] Unified search
+- [ ] Ranking
+- [ ] Everything integration
 
 ## v1完了済み
 
@@ -23,7 +30,7 @@ Text search、Symbol search、File outline、Index status、CLI、Windows suppor
 
 ## v1残作業（優先順）
 
-1. Generic search tool、Query Planner、統合Ranking
+1. Generic search toolとUnified search
 2. Everything optional integration
 3. Claude Code integration
 4. Codex integration

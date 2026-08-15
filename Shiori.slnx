@@ -4,4 +4,7 @@
     <Project Path="src/Shiori.Native/Shiori.Native.csproj" />
     <Project Path="src/Shiori.Cli/Shiori.Cli.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Shiori.Core.Tests/Shiori.Core.Tests.csproj" />
+  </Folder>
 </Solution>
