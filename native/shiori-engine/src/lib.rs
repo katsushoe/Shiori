@@ -285,6 +285,46 @@ pub unsafe extern "C" fn shiori_engine_search_text(
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn shiori_engine_file_outline(
+    handle: *mut c_void,
+    path: *const u8,
+    path_length: usize,
+    result: *mut NativeBuffer,
+    error: *mut NativeBuffer,
+) -> i32 {
+    ffi_boundary(error, || {
+        if handle.is_null() || result.is_null() {
+            return Err((
+                STATUS_INVALID_ARGUMENT,
+                "invalid file outline arguments".to_owned(),
+            ));
+        }
+        let engine = unsafe { &*handle.cast::<Engine>() };
+        let requested = unsafe { read_utf8(path, path_length) }?;
+        if requested.is_empty() {
+            return Err((
+                STATUS_INVALID_ARGUMENT,
+                "outline path must not be empty".to_owned(),
+            ));
+        }
+        let relative_path = resolve_workspace_file(&engine.root, requested)?;
+        ensure_index(engine)?;
+        let outline = engine
+            .database
+            .file_outline(&relative_path)
+            .map_err(|message| (STATUS_IO, message))?;
+        let json = serde_json::to_string(&outline).map_err(|source| {
+            (
+                STATUS_IO,
+                format!("cannot serialize file outline: {source}"),
+            )
+        })?;
+        unsafe { *result = NativeBuffer::from_string(json) };
+        Ok(())
+    })
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn shiori_engine_close(handle: *mut c_void) -> bool {
     if handle.is_null() {
         return true;
@@ -355,6 +395,38 @@ fn rebuild_index(engine: &Engine) -> Result<IndexStatus, (i32, String)> {
         .database
         .index_status()
         .map_err(|message| (STATUS_IO, message))
+}
+
+fn ensure_index(engine: &Engine) -> Result<(), (i32, String)> {
+    let status = engine
+        .database
+        .index_status()
+        .map_err(|message| (STATUS_IO, message))?;
+    if status.status != "ready" {
+        rebuild_index(engine)?;
+    }
+    Ok(())
+}
+
+fn resolve_workspace_file(root: &Path, requested: &str) -> Result<String, (i32, String)> {
+    let path = root
+        .join(requested)
+        .canonicalize()
+        .map_err(|source| (STATUS_IO, format!("outline file is unavailable: {source}")))?;
+    if !path.starts_with(root) || !path.is_file() {
+        return Err((
+            STATUS_INVALID_ARGUMENT,
+            "outline path must be a file inside the workspace".to_owned(),
+        ));
+    }
+    path.strip_prefix(root)
+        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+        .map_err(|source| {
+            (
+                STATUS_INVALID_ARGUMENT,
+                format!("cannot resolve outline path: {source}"),
+            )
+        })
 }
 
 fn write_index_status(

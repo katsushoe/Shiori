@@ -20,6 +20,7 @@ static int Run(string[] arguments)
             "find" => RunFind(arguments[1..]),
             "grep" => RunGrep(arguments[1..]),
             "index" => RunIndex(arguments[1..]),
+            "outline" => RunOutline(arguments[1..]),
             "workspace" => RunWorkspace(arguments[1..]),
             "doctor" => DoctorRunner.Run(),
             "serve" => RunServer(arguments[1..]),
@@ -30,6 +31,21 @@ static int Run(string[] arguments)
     {
         return Fail(exception.Message);
     }
+}
+
+static int RunOutline(string[] arguments)
+{
+    if (arguments.Length == 0) return Fail("outline requires a source-file path.");
+    var workspace = GetOption(arguments, "--allow")
+        ?? throw new ArgumentException("--allow is required.");
+    using var engine = NativeShioriEngine.Open(workspace);
+    var outline = engine.GetFileOutline(arguments[0]);
+    Console.WriteLine(JsonSerializer.Serialize(outline, new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        WriteIndented = true,
+    }));
+    return 0;
 }
 
 static int RunWorkspace(string[] arguments)
@@ -150,6 +166,7 @@ static string Usage() => """
       shiori index build --allow <directory>
       shiori index status --allow <directory>
       shiori index rebuild --allow <directory>
+      shiori outline <source-file> --allow <directory>
       shiori workspace add <absolute-directory>
       shiori workspace list
       shiori workspace remove <name-or-id-or-absolute-directory>

@@ -1,5 +1,5 @@
 use crate::index::IndexedFile;
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::fmt::Write;
@@ -39,6 +39,41 @@ pub struct SqliteDiagnostics {
     pub version: String,
     pub quick_check: String,
     pub fts5_enabled: bool,
+}
+
+#[derive(Serialize)]
+pub struct FileOutline {
+    pub path: String,
+    pub language: Option<String>,
+    pub symbols: Vec<OutlineSymbol>,
+}
+
+#[derive(Serialize)]
+pub struct OutlineSymbol {
+    pub name: String,
+    pub qualified_name: String,
+    pub kind: String,
+    pub language: String,
+    pub start_line: i64,
+    pub start_column: i64,
+    pub end_line: i64,
+    pub end_column: i64,
+    pub signature: Option<String>,
+    pub children: Vec<OutlineSymbol>,
+}
+
+struct StoredSymbol {
+    id: i64,
+    parent_id: Option<i64>,
+    name: String,
+    qualified_name: String,
+    kind: String,
+    language: String,
+    start_line: i64,
+    start_column: i64,
+    end_line: i64,
+    end_column: i64,
+    signature: Option<String>,
 }
 
 impl WorkspaceDatabase {
@@ -267,6 +302,62 @@ impl WorkspaceDatabase {
         .collect()
     }
 
+    pub fn file_outline(&self, relative_path: &str) -> Result<FileOutline, String> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "workspace database lock is poisoned".to_owned())?;
+        let file = connection
+            .query_row(
+                "SELECT id, relative_path, language FROM files
+                 WHERE workspace_id = ?1 AND relative_path = ?2",
+                params![self.info.id, relative_path],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, Option<String>>(2)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(|source| format!("cannot resolve outline file: {source}"))?
+            .ok_or_else(|| format!("file is not indexed: {relative_path}"))?;
+        let mut statement = connection
+            .prepare(
+                "SELECT id, parent_symbol_id, name, qualified_name, kind, language,
+                        start_line, start_column, end_line, end_column, signature
+                 FROM symbols WHERE workspace_id = ?1 AND file_id = ?2
+                 ORDER BY start_line, start_column, id",
+            )
+            .map_err(|source| format!("cannot prepare file outline: {source}"))?;
+        let rows = statement
+            .query_map(params![self.info.id, file.0], |row| {
+                Ok(StoredSymbol {
+                    id: row.get(0)?,
+                    parent_id: row.get(1)?,
+                    name: row.get(2)?,
+                    qualified_name: row.get(3)?,
+                    kind: row.get(4)?,
+                    language: row.get(5)?,
+                    start_line: row.get(6)?,
+                    start_column: row.get(7)?,
+                    end_line: row.get(8)?,
+                    end_column: row.get(9)?,
+                    signature: row.get(10)?,
+                })
+            })
+            .map_err(|source| format!("cannot read file outline: {source}"))?;
+        let stored = rows
+            .map(|row| row.map_err(|source| format!("cannot read outline symbol: {source}")))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(FileOutline {
+            path: file.1,
+            language: file.2,
+            symbols: outline_children(&stored, None),
+        })
+    }
+
     #[cfg(test)]
     fn file_count(&self) -> i64 {
         let connection = self.connection.lock().expect("database should lock");
@@ -282,6 +373,25 @@ impl WorkspaceDatabase {
             .query_row("SELECT count(*) FROM symbols", [], |row| row.get(0))
             .expect("symbol count should be readable")
     }
+}
+
+fn outline_children(symbols: &[StoredSymbol], parent_id: Option<i64>) -> Vec<OutlineSymbol> {
+    symbols
+        .iter()
+        .filter(|symbol| symbol.parent_id == parent_id)
+        .map(|symbol| OutlineSymbol {
+            name: symbol.name.clone(),
+            qualified_name: symbol.qualified_name.clone(),
+            kind: symbol.kind.clone(),
+            language: symbol.language.clone(),
+            start_line: symbol.start_line,
+            start_column: symbol.start_column,
+            end_line: symbol.end_line,
+            end_column: symbol.end_column,
+            signature: symbol.signature.clone(),
+            children: outline_children(symbols, Some(symbol.id)),
+        })
+        .collect()
 }
 
 pub fn sqlite_diagnostics() -> Result<SqliteDiagnostics, String> {
@@ -567,6 +677,13 @@ mod tests {
 
         assert_eq!(database.file_count(), 1);
         assert_eq!(database.symbol_count(), 1);
+        let outline = database
+            .file_outline("sample.rs")
+            .expect("outline should be readable");
+        assert_eq!(outline.language.as_deref(), Some("rust"));
+        assert_eq!(outline.symbols.len(), 1);
+        assert_eq!(outline.symbols[0].name, "sample");
+        assert_eq!(outline.symbols[0].kind, "function");
         let ready_status = database.index_status().expect("status should be readable");
         assert_eq!(ready_status.status, "ready");
         assert_eq!(ready_status.indexed_files, 1);

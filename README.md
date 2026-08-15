@@ -16,6 +16,7 @@ dotnet run --project src/Shiori.Cli -- grep <query> --allow <directory> [--glob 
 dotnet run --project src/Shiori.Cli -- index build --allow <directory>
 dotnet run --project src/Shiori.Cli -- index status --allow <directory>
 dotnet run --project src/Shiori.Cli -- index rebuild --allow <directory>
+dotnet run --project src/Shiori.Cli -- outline <source-file> --allow <directory>
 dotnet run --project src/Shiori.Cli -- workspace add <absolute-directory>
 dotnet run --project src/Shiori.Cli -- workspace list
 dotnet run --project src/Shiori.Cli -- workspace remove <name-or-id-or-absolute-directory>
@@ -35,8 +36,8 @@ dependency-directory exclusions. File-name searches lazily build and then use
 this persistent index.
 
 The MCP server exposes `workspace_list`, `index_status`, `reindex`,
-`search_files`, and `search_text`. `reindex` builds a missing index by default;
-set `force` to `true` to run a full rescan.
+`search_files`, `search_text`, and `file_outline`. `reindex` builds a missing
+index by default; set `force` to `true` to run a full rescan.
 
 CLI workspace registrations are stored in the current user's local application
 data directory. Removing a registration preserves its SQLite index database.

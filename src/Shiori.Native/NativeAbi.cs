@@ -44,6 +44,14 @@ internal static partial class NativeAbi
         out NativeBuffer result,
         out NativeBuffer error);
 
+    [LibraryImport(LibraryName, EntryPoint = "shiori_engine_file_outline")]
+    internal static unsafe partial int GetFileOutline(
+        ShioriEngineHandle handle,
+        byte* path,
+        nuint pathLength,
+        out NativeBuffer result,
+        out NativeBuffer error);
+
     [LibraryImport(LibraryName, EntryPoint = "shiori_engine_workspace_info")]
     internal static partial int GetWorkspaceInfo(
         ShioriEngineHandle handle,

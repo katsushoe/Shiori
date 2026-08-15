@@ -18,6 +18,9 @@ public interface IShioriEngine : IDisposable
     /// <summary>Forces a full rebuild of the file index.</summary>
     IndexStatus RebuildIndex();
 
+    /// <summary>Gets the indexed symbol hierarchy for one workspace file.</summary>
+    FileOutline GetFileOutline(string path);
+
     /// <summary>Searches file names and paths in the allowed workspace.</summary>
     IReadOnlyList<SearchResult> SearchFiles(string query, int limit = 20);
 

@@ -16,6 +16,32 @@ pub struct ExtractedSymbol {
 
 pub fn extract(language: LanguageId, source: &[u8], tree: &Tree) -> Vec<ExtractedSymbol> {
     let mut symbols = Vec::new();
+    if language == LanguageId::CSharp {
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+        let children = root.named_children(&mut cursor).collect::<Vec<_>>();
+        if let Some(namespace) = children
+            .iter()
+            .copied()
+            .find(|node| node.kind() == "file_scoped_namespace_declaration")
+        {
+            visit(namespace, source, language, None, None, &mut symbols);
+            if let Some(parent) = symbols.first() {
+                let parent_name = parent.qualified_name.clone();
+                for child in children.into_iter().filter(|node| *node != namespace) {
+                    visit(
+                        child,
+                        source,
+                        language,
+                        Some(0),
+                        Some(&parent_name),
+                        &mut symbols,
+                    );
+                }
+            }
+            return symbols;
+        }
+    }
     visit(tree.root_node(), source, language, None, None, &mut symbols);
     symbols
 }
@@ -217,6 +243,18 @@ mod tests {
                 .iter()
                 .any(|symbol| symbol.qualified_name == "Demo::Sample::Run")
         );
+    }
+
+    #[test]
+    fn extract_applies_file_scoped_csharp_namespace() {
+        let source = b"namespace Demo; public record Sample();";
+        let tree = parse(LanguageId::CSharp, source).expect("C# should parse");
+
+        let symbols = extract(LanguageId::CSharp, source, &tree);
+
+        assert!(symbols.iter().any(|symbol| {
+            symbol.qualified_name == "Demo::Sample" && symbol.parent_index == Some(0)
+        }));
     }
 
     #[test]

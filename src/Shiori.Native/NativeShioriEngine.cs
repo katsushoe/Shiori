@@ -55,6 +55,37 @@ public sealed class NativeShioriEngine : IShioriEngine
     /// <inheritdoc />
     public IndexStatus RebuildIndex() => ReadIndexStatus(NativeAbi.RebuildIndex, "Native index rebuild failed.");
 
+    /// <inheritdoc />
+    public unsafe FileOutline GetFileOutline(string path)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var bytes = Encoding.UTF8.GetBytes(path);
+        fixed (byte* pointer = bytes)
+        {
+            var status = NativeAbi.GetFileOutline(
+                _handle,
+                pointer,
+                (nuint)bytes.Length,
+                out var result,
+                out var error);
+            if (status != 0)
+            {
+                throw CreateException(error, "Native file outline failed.");
+            }
+
+            try
+            {
+                return JsonSerializer.Deserialize<FileOutline>(ReadBuffer(result), JsonOptions)
+                    ?? throw new ShioriEngineException("Native engine returned an invalid file outline.");
+            }
+            finally
+            {
+                NativeAbi.FreeBuffer(result);
+            }
+        }
+    }
+
     /// <summary>Opens the native engine for an explicitly allowed workspace.</summary>
     public static unsafe NativeShioriEngine Open(string workspace)
     {

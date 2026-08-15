@@ -38,6 +38,18 @@ internal sealed class ShioriTools
         return force ? engine.RebuildIndex() : engine.BuildIndex();
     }
 
+    [McpServerTool(Name = "file_outline", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Returns the indexed symbol hierarchy of one source file before reading its full contents.")]
+    public static FileOutline GetFileOutline(
+        [Description("Absolute path of the allowed workspace.")] string workspace,
+        [Description("Relative or absolute source-file path inside the workspace.")] string path,
+        NativeEngineRegistry registry,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return registry.GetEngine(workspace).GetFileOutline(path);
+    }
+
     [McpServerTool(Name = "search_files", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Searches file names and paths in a local Shiori workspace.")]
     public static SearchFilesResponse SearchFiles(
