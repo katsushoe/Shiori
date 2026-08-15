@@ -9,6 +9,7 @@ use std::slice;
 mod database;
 mod index;
 mod languages;
+mod symbols;
 mod text_search;
 
 use database::{IndexStatus, WorkspaceDatabase};

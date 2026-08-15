@@ -27,6 +27,7 @@ pub struct IndexStatus {
     pub workspace_id: String,
     pub status: String,
     pub indexed_files: i64,
+    pub indexed_symbols: i64,
     pub index_version: i64,
     pub parser_version: Option<String>,
     pub last_scan: Option<String>,
@@ -133,6 +134,46 @@ impl WorkspaceDatabase {
                     )
                 })
                 .map_err(|source| format!("cannot update indexed file: {source}"))?;
+            let file_id: i64 = transaction
+                .query_row(
+                    "SELECT id FROM files WHERE workspace_id = ?1 AND relative_path = ?2",
+                    params![self.info.id, file.relative_path],
+                    |row| row.get(0),
+                )
+                .map_err(|source| format!("cannot resolve indexed file: {source}"))?;
+            transaction
+                .execute("DELETE FROM symbols WHERE file_id = ?1", params![file_id])
+                .map_err(|source| format!("cannot replace file symbols: {source}"))?;
+            let mut symbol_ids = Vec::with_capacity(file.symbols.len());
+            for symbol in &file.symbols {
+                let parent_id = symbol
+                    .parent_index
+                    .and_then(|index| symbol_ids.get(index))
+                    .copied();
+                transaction
+                    .execute(
+                        "INSERT INTO symbols
+                         (workspace_id, file_id, name, qualified_name, kind, language,
+                          start_line, start_column, end_line, end_column, parent_symbol_id, signature)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                        params![
+                            self.info.id,
+                            file_id,
+                            symbol.name,
+                            symbol.qualified_name,
+                            symbol.kind,
+                            symbol.language,
+                            symbol.start_line,
+                            symbol.start_column,
+                            symbol.end_line,
+                            symbol.end_column,
+                            parent_id,
+                            symbol.signature
+                        ],
+                    )
+                    .map_err(|source| format!("cannot store file symbol: {source}"))?;
+                symbol_ids.push(transaction.last_insert_rowid());
+            }
         }
         transaction
             .execute(
@@ -160,6 +201,9 @@ impl WorkspaceDatabase {
                     params![self.info.id, crate::languages::PARSER_VERSION],
                 )
             })
+            .and_then(|_| {
+                transaction.execute("INSERT INTO symbols_fts(symbols_fts) VALUES('rebuild')", [])
+            })
             .and_then(|_| transaction.execute("DROP TABLE indexed_paths", []))
             .map_err(|source| format!("cannot finalize file index update: {source}"))?;
         transaction
@@ -174,24 +218,24 @@ impl WorkspaceDatabase {
             .map_err(|_| "workspace database lock is poisoned".to_owned())?;
         connection
             .query_row(
-                "SELECT state.workspace_id, state.status, count(files.id),
+                "SELECT state.workspace_id, state.status,
+                        (SELECT count(*) FROM files WHERE workspace_id = state.workspace_id),
+                        (SELECT count(*) FROM symbols WHERE workspace_id = state.workspace_id),
                         state.index_version, state.parser_version,
                         state.last_scan, state.last_full_index
                  FROM index_state AS state
-                 LEFT JOIN files ON files.workspace_id = state.workspace_id
-                 WHERE state.workspace_id = ?1
-                 GROUP BY state.workspace_id, state.status, state.index_version,
-                          state.parser_version, state.last_scan, state.last_full_index",
+                 WHERE state.workspace_id = ?1",
                 params![self.info.id],
                 |row| {
                     Ok(IndexStatus {
                         workspace_id: row.get(0)?,
                         status: row.get(1)?,
                         indexed_files: row.get(2)?,
-                        index_version: row.get(3)?,
-                        parser_version: row.get(4)?,
-                        last_scan: row.get(5)?,
-                        last_full_index: row.get(6)?,
+                        indexed_symbols: row.get(3)?,
+                        index_version: row.get(4)?,
+                        parser_version: row.get(5)?,
+                        last_scan: row.get(6)?,
+                        last_full_index: row.get(7)?,
                     })
                 },
             )
@@ -229,6 +273,14 @@ impl WorkspaceDatabase {
         connection
             .query_row("SELECT count(*) FROM files", [], |row| row.get(0))
             .expect("file count should be readable")
+    }
+
+    #[cfg(test)]
+    fn symbol_count(&self) -> i64 {
+        let connection = self.connection.lock().expect("database should lock");
+        connection
+            .query_row("SELECT count(*) FROM symbols", [], |row| row.get(0))
+            .expect("symbol count should be readable")
     }
 }
 
@@ -507,15 +559,18 @@ mod tests {
         let initial_status = database.index_status().expect("status should be readable");
         assert_eq!(initial_status.status, "not_indexed");
         assert_eq!(initial_status.indexed_files, 0);
+        assert_eq!(initial_status.indexed_symbols, 0);
 
         database
             .replace_file_index(&index::scan(&workspace).expect("workspace should scan"))
             .expect("file index should be stored");
 
         assert_eq!(database.file_count(), 1);
+        assert_eq!(database.symbol_count(), 1);
         let ready_status = database.index_status().expect("status should be readable");
         assert_eq!(ready_status.status, "ready");
         assert_eq!(ready_status.indexed_files, 1);
+        assert_eq!(ready_status.indexed_symbols, 1);
         assert_eq!(
             ready_status.parser_version.as_deref(),
             Some(crate::languages::PARSER_VERSION)

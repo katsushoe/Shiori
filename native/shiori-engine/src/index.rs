@@ -1,4 +1,5 @@
 use crate::languages;
+use crate::symbols::{self, ExtractedSymbol};
 use ignore::overrides::OverrideBuilder;
 use ignore::{DirEntry, WalkBuilder};
 use std::path::Path;
@@ -27,6 +28,7 @@ pub struct IndexedFile {
     pub language: Option<&'static str>,
     pub size: i64,
     pub mtime: i64,
+    pub symbols: Vec<ExtractedSymbol>,
 }
 
 pub fn scan(root: &Path) -> Result<Vec<IndexedFile>, String> {
@@ -84,14 +86,17 @@ fn scan_with_patterns(root: &Path, patterns: &[&str]) -> Result<Vec<IndexedFile>
             .and_then(|value| value.to_str())
             .map(str::to_lowercase);
         let language = languages::detect(path);
-        if let Some(language) = language {
+        let symbols = if let Some(language) = language {
             let source = std::fs::read(path).map_err(|error| {
                 format!("cannot read source file '{}': {error}", path.display())
             })?;
-            languages::parse(language, &source).map_err(|error| {
+            let tree = languages::parse(language, &source).map_err(|error| {
                 format!("cannot parse source file '{}': {error}", path.display())
             })?;
-        }
+            symbols::extract(language, &source, &tree)
+        } else {
+            Vec::new()
+        };
         files.push(IndexedFile {
             absolute_path: normalize_path(path),
             relative_path: normalize_path(relative),
@@ -99,6 +104,7 @@ fn scan_with_patterns(root: &Path, patterns: &[&str]) -> Result<Vec<IndexedFile>
             extension,
             size: i64::try_from(metadata.len()).unwrap_or(i64::MAX),
             mtime: modified_time(&metadata),
+            symbols,
         });
     }
     files.sort_unstable_by(|left, right| left.relative_path.cmp(&right.relative_path));

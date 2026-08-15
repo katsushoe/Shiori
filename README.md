@@ -53,6 +53,9 @@ produce warnings; required runtime failures return exit code 1.
 
 Tree-sitter language detection supports C#, TypeScript/TSX, JavaScript, Python,
 Rust, Go, Java, C, and C++ in the v1 parser set.
+Full index builds extract namespaces/modules, types, functions, methods,
+constructors, properties, fields, and constants into SQLite `symbols` while
+maintaining parent and qualified-name relationships.
 
 Set `SHIORI_EXCLUDE_PATTERNS` to semicolon-separated gitignore-style glob
 patterns (for example, `generated/**;*.min.js`) to add workspace exclusions.

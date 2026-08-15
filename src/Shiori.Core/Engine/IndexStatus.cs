@@ -5,6 +5,7 @@ public sealed record IndexStatus(
     string WorkspaceId,
     string Status,
     long IndexedFiles,
+    long IndexedSymbols,
     long IndexVersion,
     string? ParserVersion,
     string? LastScan,
