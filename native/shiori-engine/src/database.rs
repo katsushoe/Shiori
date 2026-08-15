@@ -1,3 +1,4 @@
+use crate::index::IndexedFile;
 use rusqlite::{Connection, params};
 use sha2::{Digest, Sha256};
 use std::fmt::Write;
@@ -74,6 +75,117 @@ impl WorkspaceDatabase {
         }
         Ok(())
     }
+
+    pub fn replace_file_index(&self, files: &[IndexedFile]) -> Result<(), String> {
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| "workspace database lock is poisoned".to_owned())?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| format!("cannot start file index update: {source}"))?;
+        transaction
+            .execute_batch("CREATE TEMP TABLE indexed_paths (relative_path TEXT PRIMARY KEY);")
+            .map_err(|source| format!("cannot initialize file index update: {source}"))?;
+        for file in files {
+            transaction
+                .execute(
+                    "INSERT INTO files
+                     (workspace_id, path, relative_path, extension, language, size, mtime, indexed_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                     ON CONFLICT(workspace_id, relative_path) DO UPDATE SET
+                         path = excluded.path, extension = excluded.extension,
+                         language = excluded.language, size = excluded.size,
+                         mtime = excluded.mtime, indexed_at = excluded.indexed_at",
+                    params![
+                        self.info.id,
+                        file.absolute_path,
+                        file.relative_path,
+                        file.extension,
+                        file.language,
+                        file.size,
+                        file.mtime
+                    ],
+                )
+                .and_then(|_| {
+                    transaction.execute(
+                        "INSERT INTO indexed_paths (relative_path) VALUES (?1)",
+                        params![file.relative_path],
+                    )
+                })
+                .map_err(|source| format!("cannot update indexed file: {source}"))?;
+        }
+        transaction
+            .execute(
+                "DELETE FROM files WHERE workspace_id = ?1
+                 AND relative_path NOT IN (SELECT relative_path FROM indexed_paths)",
+                params![self.info.id],
+            )
+            .and_then(|_| {
+                transaction.execute(
+                    "UPDATE workspaces SET
+                         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                         last_indexed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                     WHERE id = ?1",
+                    params![self.info.id],
+                )
+            })
+            .and_then(|_| {
+                transaction.execute(
+                    "UPDATE index_state SET
+                         last_scan = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                         last_full_index = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                         status = 'ready'
+                     WHERE workspace_id = ?1",
+                    params![self.info.id],
+                )
+            })
+            .and_then(|_| transaction.execute("DROP TABLE indexed_paths", []))
+            .map_err(|source| format!("cannot finalize file index update: {source}"))?;
+        transaction
+            .commit()
+            .map_err(|source| format!("cannot commit file index update: {source}"))
+    }
+
+    pub fn search_files(&self, query: &str, limit: usize) -> Result<Vec<PathBuf>, String> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "workspace database lock is poisoned".to_owned())?;
+        let pattern = format!("%{}%", escape_like(query));
+        let mut statement = connection
+            .prepare(
+                "SELECT relative_path FROM files
+                 WHERE workspace_id = ?1 AND relative_path LIKE ?2 ESCAPE '\\'
+                 ORDER BY relative_path COLLATE NOCASE LIMIT ?3",
+            )
+            .map_err(|source| format!("cannot prepare file search: {source}"))?;
+        let rows = statement
+            .query_map(params![self.info.id, pattern, limit as i64], |row| {
+                row.get::<_, String>(0)
+            })
+            .map_err(|source| format!("cannot search file index: {source}"))?;
+        rows.map(|row| {
+            row.map(PathBuf::from)
+                .map_err(|source| format!("cannot read file search result: {source}"))
+        })
+        .collect()
+    }
+
+    #[cfg(test)]
+    fn file_count(&self) -> i64 {
+        let connection = self.connection.lock().expect("database should lock");
+        connection
+            .query_row("SELECT count(*) FROM files", [], |row| row.get(0))
+            .expect("file count should be readable")
+    }
+}
+
+fn escape_like(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
 }
 
 fn configure(connection: &Connection) -> Result<(), String> {
@@ -254,7 +366,9 @@ fn workspace_id(normalized_path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::WorkspaceDatabase;
+    use crate::index;
     use std::fs;
+    use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
@@ -292,6 +406,37 @@ mod tests {
         assert_eq!(foreign_keys, 1);
         assert!(table_count >= 8);
         drop(connection);
+        drop(database);
+        fs::remove_dir_all(test_root).expect("test directory should be removed");
+    }
+
+    #[test]
+    fn replace_file_index_persists_current_workspace_files() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be valid")
+            .as_nanos();
+        let test_root = std::env::temp_dir().join(format!(
+            "shiori-db-index-test-{}-{unique}",
+            std::process::id()
+        ));
+        let workspace = test_root.join("workspace");
+        let data = test_root.join("data");
+        fs::create_dir_all(&workspace).expect("workspace should be created");
+        fs::write(workspace.join("sample.rs"), "fn sample() {}").expect("sample should be written");
+        let database = WorkspaceDatabase::open_at(&workspace, &data).expect("database should open");
+
+        database
+            .replace_file_index(&index::scan(&workspace).expect("workspace should scan"))
+            .expect("file index should be stored");
+
+        assert_eq!(database.file_count(), 1);
+        assert_eq!(
+            database
+                .search_files("sample", 10)
+                .expect("search should succeed"),
+            vec![PathBuf::from("sample.rs")]
+        );
         drop(database);
         fs::remove_dir_all(test_root).expect("test directory should be removed");
     }

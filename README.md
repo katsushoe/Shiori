@@ -23,7 +23,13 @@ list of absolute workspace paths before starting it.
 
 Opening a configured workspace creates its SQLite database under the platform
 data directory (`%LOCALAPPDATA%\Shiori\indexes\<workspace-id>\shiori.db` on
-Windows). The `workspace_list` MCP Tool returns registration and schema status.
+Windows), scans file metadata into the database, and honors `.gitignore` plus
+Shiori's default build and dependency-directory exclusions. File-name searches
+run against this persistent index. The `workspace_list` MCP Tool returns
+registration and schema status.
+
+Set `SHIORI_EXCLUDE_PATTERNS` to semicolon-separated gitignore-style glob
+patterns (for example, `generated/**;*.min.js`) to add workspace exclusions.
 
 Build `native/shiori-engine` as a `cdylib` and place the resulting
 `shiori_engine` native library beside the managed executable. Search operations

@@ -1,12 +1,12 @@
 #![allow(linker_messages)]
 
 use std::ffi::c_void;
-use std::fs;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::slice;
 
 mod database;
+mod index;
 
 use database::WorkspaceDatabase;
 
@@ -14,24 +14,7 @@ const ABI_VERSION: u32 = 1;
 const STATUS_INVALID_ARGUMENT: i32 = 1;
 const STATUS_IO: i32 = 2;
 const STATUS_PANIC: i32 = 255;
-const EXCLUSIONS: &[&str] = &[
-    ".git",
-    "node_modules",
-    "bin",
-    "obj",
-    "target",
-    "dist",
-    "build",
-    ".vs",
-    ".idea",
-    ".next",
-    "coverage",
-    "vendor",
-    "packages",
-];
-
 struct Engine {
-    root: PathBuf,
     database: WorkspaceDatabase,
 }
 
@@ -85,7 +68,11 @@ pub unsafe extern "C" fn shiori_engine_open(
         database
             .validate()
             .map_err(|message| (STATUS_IO, message))?;
-        unsafe { *handle = Box::into_raw(Box::new(Engine { root, database })).cast() };
+        let files = index::scan(&root).map_err(|message| (STATUS_IO, message))?;
+        database
+            .replace_file_index(&files)
+            .map_err(|message| (STATUS_IO, message))?;
+        unsafe { *handle = Box::into_raw(Box::new(Engine { database })).cast() };
         Ok(())
     })
 }
@@ -142,9 +129,10 @@ pub unsafe extern "C" fn shiori_engine_search_files(
                 "query must not be empty".to_owned(),
             ));
         }
-        let mut matches = Vec::new();
-        walk(&engine.root, &engine.root, &query, limit, &mut matches)
-            .map_err(|source| (STATUS_IO, format!("file search failed: {source}")))?;
+        let matches = engine
+            .database
+            .search_files(&query, limit)
+            .map_err(|message| (STATUS_IO, message))?;
         unsafe { *result = NativeBuffer::from_string(serialize_results(&matches)) };
         Ok(())
     })
@@ -208,44 +196,6 @@ unsafe fn read_utf8<'a>(pointer: *const u8, length: usize) -> Result<&'a str, (i
             "input is not valid UTF-8".to_owned(),
         )
     })
-}
-
-fn walk(
-    root: &Path,
-    directory: &Path,
-    query: &str,
-    limit: usize,
-    results: &mut Vec<PathBuf>,
-) -> std::io::Result<()> {
-    if results.len() >= limit {
-        return Ok(());
-    }
-    let mut entries = fs::read_dir(directory)?.collect::<Result<Vec<_>, _>>()?;
-    entries.sort_by_key(|entry| entry.file_name());
-    for entry in entries {
-        if results.len() >= limit {
-            break;
-        }
-        let file_type = entry.file_type()?;
-        if file_type.is_symlink() {
-            continue;
-        }
-        let path = entry.path();
-        if file_type.is_dir() {
-            let name = entry.file_name();
-            if !EXCLUSIONS
-                .iter()
-                .any(|excluded| name.to_string_lossy() == *excluded)
-            {
-                walk(root, &path, query, limit, results)?;
-            }
-        } else if let Ok(relative) = path.strip_prefix(root)
-            && relative.to_string_lossy().to_lowercase().contains(query)
-        {
-            results.push(relative.to_path_buf());
-        }
-    }
-    Ok(())
 }
 
 fn serialize_results(results: &[PathBuf]) -> String {
