@@ -12,6 +12,7 @@ Product version: `0.0.0.0`.
 
 ```text
 dotnet run --project src/Shiori.Cli -- find <query> --allow <directory> [--limit <count>]
+dotnet run --project src/Shiori.Cli -- grep <query> --allow <directory> [--glob <glob>] [--regex]
 dotnet run --project src/Shiori.Cli -- doctor
 dotnet run --project src/Shiori.Cli -- serve --port 39473
 ```

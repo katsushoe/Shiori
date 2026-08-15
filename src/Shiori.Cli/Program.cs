@@ -17,6 +17,7 @@ static int Run(string[] arguments)
         return arguments[0] switch
         {
             "find" => RunFind(arguments[1..]),
+            "grep" => RunGrep(arguments[1..]),
             "doctor" => RunDoctor(),
             "serve" => RunServer(arguments[1..]),
             _ => Fail($"Unknown command: {arguments[0]}")
@@ -26,6 +27,33 @@ static int Run(string[] arguments)
     {
         return Fail(exception.Message);
     }
+}
+
+static int RunGrep(string[] arguments)
+{
+    if (arguments.Length == 0) return Fail("grep requires a query.");
+    var workspace = GetOption(arguments, "--allow")
+        ?? throw new ArgumentException("--allow is required.");
+    var limit = int.TryParse(GetOption(arguments, "--limit"), out var parsedLimit) ? parsedLimit : 20;
+    var context = int.TryParse(GetOption(arguments, "--context"), out var parsedContext) ? parsedContext : 0;
+    using var engine = NativeShioriEngine.Open(workspace);
+    var response = new
+    {
+        results = engine.SearchText(
+            arguments[0],
+            GetOption(arguments, "--path"),
+            GetOption(arguments, "--glob"),
+            HasOption(arguments, "--regex"),
+            HasOption(arguments, "--case-sensitive"),
+            context,
+            limit),
+    };
+    Console.WriteLine(JsonSerializer.Serialize(response, new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        WriteIndented = true,
+    }));
+    return 0;
 }
 
 static int RunFind(string[] arguments)
@@ -67,6 +95,9 @@ static string? GetOption(string[] arguments, string option)
     return null;
 }
 
+static bool HasOption(string[] arguments, string option) =>
+    arguments.Contains(option, StringComparer.Ordinal);
+
 static int Fail(string message)
 {
     Console.Error.WriteLine($"error: {message}");
@@ -76,6 +107,8 @@ static int Fail(string message)
 static string Usage() => """
     Usage:
       shiori find <query> --allow <directory> [--limit <1-100>]
+      shiori grep <query> --allow <directory> [--path <path>] [--glob <glob>]
+        [--regex] [--case-sensitive] [--context <0-10>] [--limit <1-100>]
       shiori doctor
       shiori serve [--port <1-65535>]
     """;

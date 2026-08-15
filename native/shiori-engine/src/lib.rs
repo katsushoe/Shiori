@@ -7,6 +7,7 @@ use std::slice;
 
 mod database;
 mod index;
+mod text_search;
 
 use database::WorkspaceDatabase;
 
@@ -15,6 +16,7 @@ const STATUS_INVALID_ARGUMENT: i32 = 1;
 const STATUS_IO: i32 = 2;
 const STATUS_PANIC: i32 = 255;
 struct Engine {
+    root: PathBuf,
     database: WorkspaceDatabase,
 }
 
@@ -72,7 +74,7 @@ pub unsafe extern "C" fn shiori_engine_open(
         database
             .replace_file_index(&files)
             .map_err(|message| (STATUS_IO, message))?;
-        unsafe { *handle = Box::into_raw(Box::new(Engine { database })).cast() };
+        unsafe { *handle = Box::into_raw(Box::new(Engine { root, database })).cast() };
         Ok(())
     })
 }
@@ -134,6 +136,43 @@ pub unsafe extern "C" fn shiori_engine_search_files(
             .search_files(&query, limit)
             .map_err(|message| (STATUS_IO, message))?;
         unsafe { *result = NativeBuffer::from_string(serialize_results(&matches)) };
+        Ok(())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn shiori_engine_search_text(
+    handle: *mut c_void,
+    request: *const u8,
+    request_length: usize,
+    result: *mut NativeBuffer,
+    error: *mut NativeBuffer,
+) -> i32 {
+    ffi_boundary(error, || {
+        if handle.is_null() || result.is_null() {
+            return Err((
+                STATUS_INVALID_ARGUMENT,
+                "invalid text search arguments".to_owned(),
+            ));
+        }
+        let engine = unsafe { &*handle.cast::<Engine>() };
+        let request = unsafe { read_utf8(request, request_length) }?;
+        let request: text_search::TextSearchRequest =
+            serde_json::from_str(request).map_err(|source| {
+                (
+                    STATUS_INVALID_ARGUMENT,
+                    format!("invalid text search request: {source}"),
+                )
+            })?;
+        let response =
+            text_search::search(&engine.root, &request).map_err(|message| (STATUS_IO, message))?;
+        let json = serde_json::to_string(&response).map_err(|source| {
+            (
+                STATUS_IO,
+                format!("cannot serialize text search response: {source}"),
+            )
+        })?;
+        unsafe { *result = NativeBuffer::from_string(json) };
         Ok(())
     })
 }

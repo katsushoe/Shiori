@@ -33,6 +33,14 @@ internal static partial class NativeAbi
         out NativeBuffer result,
         out NativeBuffer error);
 
+    [LibraryImport(LibraryName, EntryPoint = "shiori_engine_search_text")]
+    internal static unsafe partial int SearchText(
+        ShioriEngineHandle handle,
+        byte* request,
+        nuint requestLength,
+        out NativeBuffer result,
+        out NativeBuffer error);
+
     [LibraryImport(LibraryName, EntryPoint = "shiori_engine_workspace_info")]
     internal static partial int GetWorkspaceInfo(
         ShioriEngineHandle handle,

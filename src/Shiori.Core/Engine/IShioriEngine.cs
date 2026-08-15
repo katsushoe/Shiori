@@ -11,4 +11,14 @@ public interface IShioriEngine : IDisposable
 
     /// <summary>Searches file names and paths in the allowed workspace.</summary>
     IReadOnlyList<SearchResult> SearchFiles(string query, int limit = 20);
+
+    /// <summary>Searches workspace file contents through ripgrep.</summary>
+    IReadOnlyList<SearchResult> SearchText(
+        string query,
+        string? path = null,
+        string? glob = null,
+        bool regex = false,
+        bool caseSensitive = false,
+        int contextLines = 0,
+        int limit = 20);
 }

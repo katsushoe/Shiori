@@ -107,6 +107,52 @@ public sealed class NativeShioriEngine : IShioriEngine
     }
 
     /// <inheritdoc />
+    public unsafe IReadOnlyList<SearchResult> SearchText(
+        string query,
+        string? path = null,
+        string? glob = null,
+        bool regex = false,
+        bool caseSensitive = false,
+        int contextLines = 0,
+        int limit = 20)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentException.ThrowIfNullOrWhiteSpace(query);
+        ArgumentOutOfRangeException.ThrowIfLessThan(contextLines, 0);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(contextLines, 10);
+        ArgumentOutOfRangeException.ThrowIfLessThan(limit, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(limit, 100);
+
+        var request = JsonSerializer.Serialize(
+            new { query, path, glob, regex, caseSensitive, contextLines, limit },
+            JsonOptions);
+        var bytes = Encoding.UTF8.GetBytes(request);
+        fixed (byte* pointer = bytes)
+        {
+            var status = NativeAbi.SearchText(
+                _handle,
+                pointer,
+                (nuint)bytes.Length,
+                out var result,
+                out var error);
+            if (status != 0)
+            {
+                throw CreateException(error, "Native text search failed.");
+            }
+
+            try
+            {
+                return JsonSerializer.Deserialize<SearchResponse>(ReadBuffer(result), JsonOptions)?.Results
+                    ?? throw new ShioriEngineException("Native engine returned an invalid response.");
+            }
+            finally
+            {
+                NativeAbi.FreeBuffer(result);
+            }
+        }
+    }
+
+    /// <inheritdoc />
     public void Dispose()
     {
         if (_disposed) return;

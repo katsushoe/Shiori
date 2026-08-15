@@ -27,4 +27,24 @@ internal sealed class ShioriTools
         var engine = registry.GetEngine(workspace);
         return new SearchFilesResponse(engine.SearchFiles(query, limit));
     }
+
+    [McpServerTool(Name = "search_text", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Searches workspace file contents with ripgrep and returns bounded code locations.")]
+    public static SearchFilesResponse SearchText(
+        [Description("Literal text or regular expression to search for.")] string query,
+        [Description("Absolute path of the allowed workspace.")] string workspace,
+        NativeEngineRegistry registry,
+        [Description("Optional file or directory path within the workspace.")] string? path = null,
+        [Description("Optional gitignore-style file glob, such as *.cs.")] string? glob = null,
+        [Description("Treat query as a regular expression instead of literal text.")] bool regex = false,
+        [Description("Use case-sensitive matching.")] bool caseSensitive = false,
+        [Description("Lines before and after each match, from 0 to 10.")] int contextLines = 0,
+        [Description("Maximum number of results from 1 to 100.")] int limit = 20,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var engine = registry.GetEngine(workspace);
+        return new SearchFilesResponse(
+            engine.SearchText(query, path, glob, regex, caseSensitive, contextLines, limit));
+    }
 }
