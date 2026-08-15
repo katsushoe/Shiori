@@ -21,7 +21,7 @@ static int Run(string[] arguments)
             "grep" => RunGrep(arguments[1..]),
             "index" => RunIndex(arguments[1..]),
             "workspace" => RunWorkspace(arguments[1..]),
-            "doctor" => RunDoctor(),
+            "doctor" => DoctorRunner.Run(),
             "serve" => RunServer(arguments[1..]),
             _ => Fail($"Unknown command: {arguments[0]}")
         };
@@ -114,13 +114,6 @@ static int RunFind(string[] arguments)
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         WriteIndented = true,
     }));
-    return 0;
-}
-
-static int RunDoctor()
-{
-    var version = NativeAbiStatus.GetAbiVersion();
-    Console.WriteLine($"native_engine: available (ABI {version})");
     return 0;
 }
 

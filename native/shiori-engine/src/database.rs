@@ -32,6 +32,13 @@ pub struct IndexStatus {
     pub last_full_index: Option<String>,
 }
 
+#[derive(Serialize)]
+pub struct SqliteDiagnostics {
+    pub version: String,
+    pub quick_check: String,
+    pub fts5_enabled: bool,
+}
+
 impl WorkspaceDatabase {
     pub fn open(root: &Path) -> Result<Self, String> {
         let data_root = platform_data_root()?;
@@ -219,6 +226,30 @@ impl WorkspaceDatabase {
             .query_row("SELECT count(*) FROM files", [], |row| row.get(0))
             .expect("file count should be readable")
     }
+}
+
+pub fn sqlite_diagnostics() -> Result<SqliteDiagnostics, String> {
+    let connection = Connection::open_in_memory()
+        .map_err(|source| format!("cannot open SQLite diagnostics database: {source}"))?;
+    let version = connection
+        .query_row("SELECT sqlite_version()", [], |row| row.get(0))
+        .map_err(|source| format!("cannot read SQLite version: {source}"))?;
+    let quick_check = connection
+        .query_row("PRAGMA quick_check", [], |row| row.get(0))
+        .map_err(|source| format!("SQLite quick_check failed: {source}"))?;
+    let fts5_enabled = connection
+        .query_row(
+            "SELECT sqlite_compileoption_used('ENABLE_FTS5')",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|value| value == 1)
+        .map_err(|source| format!("cannot read SQLite FTS5 support: {source}"))?;
+    Ok(SqliteDiagnostics {
+        version,
+        quick_check,
+        fts5_enabled,
+    })
 }
 
 fn escape_like(value: &str) -> String {

@@ -20,6 +20,13 @@ internal sealed class WorkspaceRegistry
 
     internal WorkspaceRegistry()
     {
+        var dataRoot = GetDataRoot();
+        _registryPath = Path.Combine(dataRoot, "workspaces.json");
+    }
+
+    /// <summary>Gets the configured Shiori data root.</summary>
+    internal static string GetDataRoot()
+    {
         var dataRoot = Environment.GetEnvironmentVariable("SHIORI_DATA_HOME");
         if (string.IsNullOrWhiteSpace(dataRoot))
         {
@@ -32,7 +39,7 @@ internal sealed class WorkspaceRegistry
             dataRoot = Path.Combine(localData, "Shiori");
         }
 
-        _registryPath = Path.Combine(Path.GetFullPath(dataRoot), "workspaces.json");
+        return Path.GetFullPath(dataRoot);
     }
 
     /// <summary>Registers an existing workspace and initializes its persistent database.</summary>

@@ -3,6 +3,7 @@
 use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::slice;
 
 mod database;
@@ -10,6 +11,7 @@ mod index;
 mod text_search;
 
 use database::{IndexStatus, WorkspaceDatabase};
+use serde::Serialize;
 
 const ABI_VERSION: u32 = 1;
 const STATUS_INVALID_ARGUMENT: i32 = 1;
@@ -24,6 +26,14 @@ struct Engine {
 pub struct NativeBuffer {
     pointer: *mut u8,
     length: usize,
+}
+
+#[derive(Serialize)]
+struct RuntimeDiagnostics {
+    abi_version: u32,
+    sqlite: database::SqliteDiagnostics,
+    ripgrep_available: bool,
+    ripgrep_version: Option<String>,
 }
 
 impl NativeBuffer {
@@ -43,6 +53,47 @@ impl NativeBuffer {
 #[unsafe(no_mangle)]
 pub extern "C" fn shiori_engine_abi_version() -> u32 {
     ABI_VERSION
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn shiori_engine_diagnostics(
+    result: *mut NativeBuffer,
+    error: *mut NativeBuffer,
+) -> i32 {
+    ffi_boundary(error, || {
+        if result.is_null() {
+            return Err((
+                STATUS_INVALID_ARGUMENT,
+                "diagnostics result is null".to_owned(),
+            ));
+        }
+        let sqlite = database::sqlite_diagnostics().map_err(|message| (STATUS_IO, message))?;
+        let ripgrep_output = Command::new("rg").arg("--version").output();
+        let (ripgrep_available, ripgrep_version) = match ripgrep_output {
+            Ok(output) if output.status.success() => {
+                let version = String::from_utf8_lossy(&output.stdout)
+                    .lines()
+                    .next()
+                    .map(str::to_owned);
+                (true, version)
+            }
+            _ => (false, None),
+        };
+        let diagnostics = RuntimeDiagnostics {
+            abi_version: ABI_VERSION,
+            sqlite,
+            ripgrep_available,
+            ripgrep_version,
+        };
+        let json = serde_json::to_string(&diagnostics).map_err(|source| {
+            (
+                STATUS_IO,
+                format!("cannot serialize runtime diagnostics: {source}"),
+            )
+        })?;
+        unsafe { *result = NativeBuffer::from_string(json) };
+        Ok(())
+    })
 }
 
 #[unsafe(no_mangle)]

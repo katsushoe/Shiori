@@ -17,6 +17,9 @@ internal static partial class NativeAbi
     [LibraryImport(LibraryName, EntryPoint = "shiori_engine_abi_version")]
     internal static partial uint GetAbiVersion();
 
+    [LibraryImport(LibraryName, EntryPoint = "shiori_engine_diagnostics")]
+    internal static partial int GetDiagnostics(out NativeBuffer result, out NativeBuffer error);
+
     [LibraryImport(LibraryName, EntryPoint = "shiori_engine_open")]
     internal static unsafe partial int Open(
         byte* workspace,
