@@ -12,6 +12,7 @@ Product version: `0.0.0.0`.
 
 ```text
 dotnet run --project src/Shiori.Cli -- find <query> --allow <directory> [--limit <count>]
+dotnet run --project src/Shiori.Cli -- search <query> --allow <directory> [--path <path>] [--limit <count>]
 dotnet run --project src/Shiori.Cli -- grep <query> --allow <directory> [--glob <glob>] [--regex]
 dotnet run --project src/Shiori.Cli -- index build --allow <directory>
 dotnet run --project src/Shiori.Cli -- index status --allow <directory>
@@ -40,13 +41,14 @@ changes, and only added, changed, or deleted files update SQLite and symbols.
 The MCP server watches allowed workspaces recursively and debounces bursts of
 create, modify, rename, and delete events into incremental index builds.
 
-The MCP server exposes `workspace_list`, `index_status`, `reindex`,
+The MCP server exposes `search`, `workspace_list`, `index_status`, `reindex`,
 `search_files`, `search_text`, `search_symbols`, and `file_outline`. `reindex` builds a missing
 index by default; set `force` to `true` to run a full rescan.
 
 The managed query planner classifies file paths, code identifiers, quoted text,
 and reference or implementation intent into deterministic file, symbol, and
-text-provider plans. The unified `search` tool will consume these plans.
+text-provider plans. The unified `search` tool executes selected providers in
+parallel, interleaves their bounded results, and reports recoverable provider errors.
 
 CLI workspace registrations are stored in the current user's local application
 data directory. Removing a registration preserves its SQLite index database.

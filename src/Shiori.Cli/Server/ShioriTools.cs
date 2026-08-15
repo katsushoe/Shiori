@@ -1,12 +1,25 @@
 using System.ComponentModel;
 using ModelContextProtocol.Server;
 using Shiori.Core.Engine;
+using Shiori.Core.Search;
 
 namespace Shiori.Cli.Server;
 
 [McpServerToolType]
 internal sealed class ShioriTools
 {
+    [McpServerTool(Name = "search", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Plans and runs a unified file, symbol, and text search for an allowed workspace.")]
+    public static Task<UnifiedSearchResponse> Search(
+        [Description("Natural-language text, code identifier, filename, path, or quoted phrase.")] string query,
+        [Description("Absolute path of the allowed workspace.")] string workspace,
+        NativeEngineRegistry registry,
+        [Description("Optional file or directory path within the workspace.")] string? path = null,
+        [Description("Maximum combined results from 1 to 100.")] int limit = 20,
+        CancellationToken cancellationToken = default) =>
+        UnifiedSearchService.SearchAsync(
+            registry.GetEngine(workspace), query, path, limit, cancellationToken);
+
     [McpServerTool(Name = "workspace_list", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Lists configured Shiori workspaces and their persistent SQLite databases.")]
     public static IReadOnlyList<WorkspaceInfo> ListWorkspaces(NativeEngineRegistry registry)

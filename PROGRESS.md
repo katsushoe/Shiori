@@ -4,8 +4,8 @@
 
 ## 完成度
 
-- v1全体: **81%**（仕様書のv1完成条件21項目中17項目完了）
-- 現在のフェーズ: **Phase 3 — 25%**（4項目中1項目完了）
+- v1全体: **86%**（仕様書のv1完成条件21項目中18項目完了）
+- 現在のフェーズ: **Phase 3 — 50%**（4項目中2項目完了）
 
 ## Phase 2（完了）
 
@@ -18,7 +18,7 @@
 ## Phase 3
 
 - [x] Query Planner
-- [ ] Unified search
+- [x] Unified search
 - [ ] Ranking
 - [ ] Everything integration
 
@@ -30,7 +30,7 @@ Text search、Symbol search、File outline、Index status、CLI、Windows suppor
 
 ## v1残作業（優先順）
 
-1. Generic search toolとUnified search
+1. file・symbol・text検索の統合Rankingと重複排除
 2. Everything optional integration
 3. Claude Code integration
 4. Codex integration

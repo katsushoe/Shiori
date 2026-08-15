@@ -2,6 +2,7 @@ using System.Text.Json;
 using Shiori.Cli;
 using Shiori.Cli.Server;
 using Shiori.Core.Engine;
+using Shiori.Core.Search;
 using Shiori.Native;
 
 return Run(args);
@@ -22,6 +23,7 @@ static int Run(string[] arguments)
             "grep" => RunGrep(arguments[1..]),
             "index" => RunIndex(arguments[1..]),
             "outline" => RunOutline(arguments[1..]),
+            "search" => RunSearch(arguments[1..]),
             "symbol" => RunSymbol(arguments[1..]),
             "workspace" => RunWorkspace(arguments[1..]),
             "doctor" => DoctorRunner.Run(),
@@ -33,6 +35,23 @@ static int Run(string[] arguments)
     {
         return Fail(exception.Message);
     }
+}
+
+static int RunSearch(string[] arguments)
+{
+    if (arguments.Length == 0) return Fail("search requires a query.");
+    var workspace = GetOption(arguments, "--allow")
+        ?? throw new ArgumentException("--allow is required.");
+    var limit = int.TryParse(GetOption(arguments, "--limit"), out var parsed) ? parsed : 20;
+    using var engine = NativeShioriEngine.Open(workspace);
+    var response = UnifiedSearchService.SearchAsync(
+        engine, arguments[0], GetOption(arguments, "--path"), limit).GetAwaiter().GetResult();
+    Console.WriteLine(JsonSerializer.Serialize(response, new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        WriteIndented = true,
+    }));
+    return 0;
 }
 
 static int RunSymbol(string[] arguments)
@@ -181,6 +200,7 @@ static int Fail(string message)
 static string Usage() => """
     Usage:
       shiori find <query> --allow <directory> [--limit <1-100>]
+      shiori search <query> --allow <directory> [--path <path>] [--limit <1-100>]
       shiori grep <query> --allow <directory> [--path <path>] [--glob <glob>]
         [--regex] [--case-sensitive] [--context <0-10>] [--limit <1-100>]
       shiori index build --allow <directory>
