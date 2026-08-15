@@ -12,3 +12,5 @@ crate-type = ["cdylib"]
 version = "0.0.0.0"
 
 [dependencies]
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+sha2 = "0.11.0"

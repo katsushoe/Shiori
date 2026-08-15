@@ -6,6 +6,10 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::slice;
 
+mod database;
+
+use database::WorkspaceDatabase;
+
 const ABI_VERSION: u32 = 1;
 const STATUS_INVALID_ARGUMENT: i32 = 1;
 const STATUS_IO: i32 = 2;
@@ -28,6 +32,7 @@ const EXCLUSIONS: &[&str] = &[
 
 struct Engine {
     root: PathBuf,
+    database: WorkspaceDatabase,
 }
 
 #[repr(C)]
@@ -76,7 +81,39 @@ pub unsafe extern "C" fn shiori_engine_open(
                 "workspace is not a directory".to_owned(),
             ));
         }
-        unsafe { *handle = Box::into_raw(Box::new(Engine { root })).cast() };
+        let database = WorkspaceDatabase::open(&root).map_err(|message| (STATUS_IO, message))?;
+        database
+            .validate()
+            .map_err(|message| (STATUS_IO, message))?;
+        unsafe { *handle = Box::into_raw(Box::new(Engine { root, database })).cast() };
+        Ok(())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn shiori_engine_workspace_info(
+    handle: *mut c_void,
+    result: *mut NativeBuffer,
+    error: *mut NativeBuffer,
+) -> i32 {
+    ffi_boundary(error, || {
+        if handle.is_null() || result.is_null() {
+            return Err((
+                STATUS_INVALID_ARGUMENT,
+                "invalid workspace info arguments".to_owned(),
+            ));
+        }
+        let engine = unsafe { &*handle.cast::<Engine>() };
+        let info = engine.database.info();
+        let json = format!(
+            "{{\"id\":\"{}\",\"path\":\"{}\",\"name\":\"{}\",\"database_path\":\"{}\",\"schema_version\":{}}}",
+            escape_json(&info.id),
+            escape_json(&info.path),
+            escape_json(&info.name),
+            escape_json(&info.database_path.replace('\\', "/")),
+            info.schema_version
+        );
+        unsafe { *result = NativeBuffer::from_string(json) };
         Ok(())
     })
 }

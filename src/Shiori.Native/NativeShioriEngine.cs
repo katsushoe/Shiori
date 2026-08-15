@@ -25,6 +25,27 @@ public sealed class NativeShioriEngine : IShioriEngine
     /// <inheritdoc />
     public uint AbiVersion { get; }
 
+    /// <inheritdoc />
+    public WorkspaceInfo GetWorkspaceInfo()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var status = NativeAbi.GetWorkspaceInfo(_handle, out var result, out var error);
+        if (status != 0)
+        {
+            throw CreateException(error, "Native workspace lookup failed.");
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<WorkspaceInfo>(ReadBuffer(result), JsonOptions)
+                ?? throw new ShioriEngineException("Native engine returned invalid workspace information.");
+        }
+        finally
+        {
+            NativeAbi.FreeBuffer(result);
+        }
+    }
+
     /// <summary>Opens the native engine for an explicitly allowed workspace.</summary>
     public static unsafe NativeShioriEngine Open(string workspace)
     {

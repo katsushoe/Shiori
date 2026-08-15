@@ -33,6 +33,12 @@ internal static partial class NativeAbi
         out NativeBuffer result,
         out NativeBuffer error);
 
+    [LibraryImport(LibraryName, EntryPoint = "shiori_engine_workspace_info")]
+    internal static partial int GetWorkspaceInfo(
+        ShioriEngineHandle handle,
+        out NativeBuffer result,
+        out NativeBuffer error);
+
     [LibraryImport(LibraryName, EntryPoint = "shiori_engine_close")]
     [return: MarshalAs(UnmanagedType.I1)]
     internal static partial bool Close(nint handle);

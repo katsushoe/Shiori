@@ -6,6 +6,9 @@ public interface IShioriEngine : IDisposable
     /// <summary>Gets the engine ABI version.</summary>
     uint AbiVersion { get; }
 
+    /// <summary>Gets persistent workspace registration information.</summary>
+    WorkspaceInfo GetWorkspaceInfo();
+
     /// <summary>Searches file names and paths in the allowed workspace.</summary>
     IReadOnlyList<SearchResult> SearchFiles(string query, int limit = 20);
 }

@@ -21,6 +21,10 @@ The server exposes one stateless Streamable HTTP endpoint at
 least 32 characters and `SHIORI_ALLOWED_WORKSPACES` to a semicolon-separated
 list of absolute workspace paths before starting it.
 
+Opening a configured workspace creates its SQLite database under the platform
+data directory (`%LOCALAPPDATA%\Shiori\indexes\<workspace-id>\shiori.db` on
+Windows). The `workspace_list` MCP Tool returns registration and schema status.
+
 Build `native/shiori-engine` as a `cdylib` and place the resulting
 `shiori_engine` native library beside the managed executable. Search operations
 never read outside the canonical `--allow` workspace.

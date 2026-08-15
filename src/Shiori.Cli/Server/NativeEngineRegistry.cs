@@ -45,6 +45,16 @@ public sealed class NativeEngineRegistry : IDisposable
         return lazyEngine.Value;
     }
 
+    /// <summary>Lists all configured workspaces and opens their persistent databases.</summary>
+    public IReadOnlyList<WorkspaceInfo> ListWorkspaces()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _allowedWorkspaces
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .Select(path => GetEngine(path).GetWorkspaceInfo())
+            .ToArray();
+    }
+
     /// <inheritdoc />
     public void Dispose()
     {

@@ -26,6 +26,11 @@ closed through `shiori_engine_close`. No panic may cross the ABI boundary.
 SQLite connections and Tree-sitter objects must not be shared across the ABI.
 They remain entirely owned by the Rust engine.
 
+Each canonical workspace has a stable SHA-256 ID and an isolated SQLite
+database. Schema migrations run transactionally when the native engine opens
+the workspace. Connections use WAL, `synchronous=NORMAL`, foreign keys, and
+memory-backed temporary storage.
+
 ## Streamable HTTP security
 
 The MCP endpoint is stateless and binds only to `127.0.0.1`. Host filtering,
