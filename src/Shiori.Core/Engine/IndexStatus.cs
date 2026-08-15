@@ -6,5 +6,6 @@ public sealed record IndexStatus(
     string Status,
     long IndexedFiles,
     long IndexVersion,
+    string? ParserVersion,
     string? LastScan,
     string? LastFullIndex);

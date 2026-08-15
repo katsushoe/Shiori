@@ -47,9 +47,12 @@ Set `SHIORI_DATA_HOME` to override the shared workspace-registry and index-data
 directory, for example when running Shiori in an isolated environment.
 
 `doctor` reports Native DLL/ABI, SQLite quick-check and FTS5 support, ripgrep,
-data-directory write access, and MCP environment configuration as structured
-JSON. Missing optional MCP settings produce warnings; required runtime failures
-return exit code 1.
+Tree-sitter grammar availability, data-directory write access, and MCP
+environment configuration as structured JSON. Missing optional MCP settings
+produce warnings; required runtime failures return exit code 1.
+
+Tree-sitter language detection supports C#, TypeScript/TSX, JavaScript, Python,
+Rust, Go, Java, C, and C++ in the v1 parser set.
 
 Set `SHIORI_EXCLUDE_PATTERNS` to semicolon-separated gitignore-style glob
 patterns (for example, `generated/**;*.min.js`) to add workspace exclusions.

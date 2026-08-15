@@ -1,3 +1,4 @@
+use crate::languages;
 use ignore::overrides::OverrideBuilder;
 use ignore::{DirEntry, WalkBuilder};
 use std::path::Path;
@@ -82,10 +83,19 @@ fn scan_with_patterns(root: &Path, patterns: &[&str]) -> Result<Vec<IndexedFile>
             .extension()
             .and_then(|value| value.to_str())
             .map(str::to_lowercase);
+        let language = languages::detect(path);
+        if let Some(language) = language {
+            let source = std::fs::read(path).map_err(|error| {
+                format!("cannot read source file '{}': {error}", path.display())
+            })?;
+            languages::parse(language, &source).map_err(|error| {
+                format!("cannot parse source file '{}': {error}", path.display())
+            })?;
+        }
         files.push(IndexedFile {
             absolute_path: normalize_path(path),
             relative_path: normalize_path(relative),
-            language: extension.as_deref().and_then(language_for_extension),
+            language: language.map(|value| value.name()),
             extension,
             size: i64::try_from(metadata.len()).unwrap_or(i64::MAX),
             mtime: modified_time(&metadata),
@@ -116,28 +126,6 @@ fn modified_time(metadata: &std::fs::Metadata) -> i64 {
 
 fn normalize_path(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
-}
-
-fn language_for_extension(extension: &str) -> Option<&'static str> {
-    match extension {
-        "c" | "h" => Some("c"),
-        "cc" | "cpp" | "cxx" | "hh" | "hpp" | "hxx" => Some("cpp"),
-        "cs" => Some("csharp"),
-        "go" => Some("go"),
-        "java" => Some("java"),
-        "js" | "jsx" | "mjs" | "cjs" => Some("javascript"),
-        "json" => Some("json"),
-        "kt" | "kts" => Some("kotlin"),
-        "php" => Some("php"),
-        "py" => Some("python"),
-        "rb" => Some("ruby"),
-        "rs" => Some("rust"),
-        "swift" => Some("swift"),
-        "ts" | "tsx" | "mts" | "cts" => Some("typescript"),
-        "xml" => Some("xml"),
-        "yml" | "yaml" => Some("yaml"),
-        _ => None,
-    }
 }
 
 #[cfg(test)]

@@ -8,6 +8,7 @@ use std::slice;
 
 mod database;
 mod index;
+mod languages;
 mod text_search;
 
 use database::{IndexStatus, WorkspaceDatabase};
@@ -34,6 +35,8 @@ struct RuntimeDiagnostics {
     sqlite: database::SqliteDiagnostics,
     ripgrep_available: bool,
     ripgrep_version: Option<String>,
+    tree_sitter_version: &'static str,
+    tree_sitter_languages: &'static [&'static str],
 }
 
 impl NativeBuffer {
@@ -68,6 +71,7 @@ pub unsafe extern "C" fn shiori_engine_diagnostics(
             ));
         }
         let sqlite = database::sqlite_diagnostics().map_err(|message| (STATUS_IO, message))?;
+        languages::validate_parsers().map_err(|message| (STATUS_IO, message))?;
         let ripgrep_output = Command::new("rg").arg("--version").output();
         let (ripgrep_available, ripgrep_version) = match ripgrep_output {
             Ok(output) if output.status.success() => {
@@ -84,6 +88,8 @@ pub unsafe extern "C" fn shiori_engine_diagnostics(
             sqlite,
             ripgrep_available,
             ripgrep_version,
+            tree_sitter_version: languages::PARSER_VERSION,
+            tree_sitter_languages: languages::SUPPORTED_LANGUAGES,
         };
         let json = serde_json::to_string(&diagnostics).map_err(|source| {
             (

@@ -46,12 +46,17 @@ internal static class DoctorRunner
                 "ripgrep",
                 diagnostics.RipgrepAvailable ? "ok" : "error",
                 diagnostics.RipgrepVersion ?? "ripgrep is unavailable"));
+            checks.Add(new DoctorCheck(
+                "tree_sitter",
+                diagnostics.TreeSitterLanguages.Count == 9 ? "ok" : "error",
+                $"Tree-sitter {diagnostics.TreeSitterVersion}; {string.Join(", ", diagnostics.TreeSitterLanguages)}"));
         }
         catch (Exception exception) when (exception is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException or InvalidOperationException)
         {
             checks.Add(new DoctorCheck("native_engine", "error", exception.Message));
             checks.Add(new DoctorCheck("sqlite", "error", "Native SQLite diagnostics could not run."));
             checks.Add(new DoctorCheck("ripgrep", "error", "Native ripgrep diagnostics could not run."));
+            checks.Add(new DoctorCheck("tree_sitter", "error", "Native Tree-sitter diagnostics could not run."));
         }
     }
 

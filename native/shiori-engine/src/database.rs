@@ -28,6 +28,7 @@ pub struct IndexStatus {
     pub status: String,
     pub indexed_files: i64,
     pub index_version: i64,
+    pub parser_version: Option<String>,
     pub last_scan: Option<String>,
     pub last_full_index: Option<String>,
 }
@@ -153,9 +154,10 @@ impl WorkspaceDatabase {
                     "UPDATE index_state SET
                          last_scan = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
                          last_full_index = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                         parser_version = ?2,
                          status = 'ready'
                      WHERE workspace_id = ?1",
-                    params![self.info.id],
+                    params![self.info.id, crate::languages::PARSER_VERSION],
                 )
             })
             .and_then(|_| transaction.execute("DROP TABLE indexed_paths", []))
@@ -173,12 +175,13 @@ impl WorkspaceDatabase {
         connection
             .query_row(
                 "SELECT state.workspace_id, state.status, count(files.id),
-                        state.index_version, state.last_scan, state.last_full_index
+                        state.index_version, state.parser_version,
+                        state.last_scan, state.last_full_index
                  FROM index_state AS state
                  LEFT JOIN files ON files.workspace_id = state.workspace_id
                  WHERE state.workspace_id = ?1
                  GROUP BY state.workspace_id, state.status, state.index_version,
-                          state.last_scan, state.last_full_index",
+                          state.parser_version, state.last_scan, state.last_full_index",
                 params![self.info.id],
                 |row| {
                     Ok(IndexStatus {
@@ -186,8 +189,9 @@ impl WorkspaceDatabase {
                         status: row.get(1)?,
                         indexed_files: row.get(2)?,
                         index_version: row.get(3)?,
-                        last_scan: row.get(4)?,
-                        last_full_index: row.get(5)?,
+                        parser_version: row.get(4)?,
+                        last_scan: row.get(5)?,
+                        last_full_index: row.get(6)?,
                     })
                 },
             )
@@ -512,6 +516,10 @@ mod tests {
         let ready_status = database.index_status().expect("status should be readable");
         assert_eq!(ready_status.status, "ready");
         assert_eq!(ready_status.indexed_files, 1);
+        assert_eq!(
+            ready_status.parser_version.as_deref(),
+            Some(crate::languages::PARSER_VERSION)
+        );
         assert!(ready_status.last_full_index.is_some());
         assert_eq!(
             database
