@@ -1,4 +1,8 @@
 /target/
+/native/shiori-engine/target/
+**/bin/
+**/obj/
+/artifacts/
 *.db
 *.db-shm
 *.db-wal

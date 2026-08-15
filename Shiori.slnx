@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Shiori.Core/Shiori.Core.csproj" />
+    <Project Path="src/Shiori.Native/Shiori.Native.csproj" />
+    <Project Path="src/Shiori.Cli/Shiori.Cli.csproj" />
+  </Folder>
+</Solution>
