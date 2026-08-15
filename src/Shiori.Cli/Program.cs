@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Shiori.Cli.Server;
 using Shiori.Native;
 
 return Run(args);
@@ -17,6 +18,7 @@ static int Run(string[] arguments)
         {
             "find" => RunFind(arguments[1..]),
             "doctor" => RunDoctor(),
+            "serve" => RunServer(arguments[1..]),
             _ => Fail($"Unknown command: {arguments[0]}")
         };
     }
@@ -49,6 +51,12 @@ static int RunDoctor()
     return 0;
 }
 
+static int RunServer(string[] arguments)
+{
+    var port = int.TryParse(GetOption(arguments, "--port"), out var parsed) ? parsed : 39473;
+    return ShioriHttpServer.RunAsync(port).GetAwaiter().GetResult();
+}
+
 static string? GetOption(string[] arguments, string option)
 {
     for (var index = 0; index < arguments.Length - 1; index++)
@@ -69,4 +77,5 @@ static string Usage() => """
     Usage:
       shiori find <query> --allow <directory> [--limit <1-100>]
       shiori doctor
+      shiori serve [--port <1-65535>]
     """;

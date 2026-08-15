@@ -13,7 +13,13 @@ Product version: `0.0.0.0`.
 ```text
 dotnet run --project src/Shiori.Cli -- find <query> --allow <directory> [--limit <count>]
 dotnet run --project src/Shiori.Cli -- doctor
+dotnet run --project src/Shiori.Cli -- serve --port 39473
 ```
+
+The server exposes one stateless Streamable HTTP endpoint at
+`http://127.0.0.1:39473/mcp`. Set `SHIORI_MCP_TOKEN` to a random value of at
+least 32 characters and `SHIORI_ALLOWED_WORKSPACES` to a semicolon-separated
+list of absolute workspace paths before starting it.
 
 Build `native/shiori-engine` as a `cdylib` and place the resulting
 `shiori_engine` native library beside the managed executable. Search operations

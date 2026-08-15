@@ -201,18 +201,13 @@ Claude Code / Codexとの通信を担当する。
 v1必須Transport：
 
 ```text
-stdio
-```
-
-将来的に必要であれば、
-
-```text
 Streamable HTTP
 ```
 
-を追加できる設計とする。
+単一のローカル常駐サーバとして起動し、複数のMCP Clientでインデックス、
+File Watcher、Tree-sitter、LSP、キャッシュを共有する。
 
-Shiori単体のローカル利用ではstdioを標準とする。
+stdioはクライアント互換性が必要な場合の将来Adapter候補とする。
 
 ---
 
@@ -1156,13 +1151,14 @@ shiori
 ## MCP Server起動
 
 ```bash
-shiori serve
+shiori serve --port 39473
 ```
 
-workspace指定：
+起動前にBearer tokenと許可workspaceを環境変数で指定する：
 
-```bash
-shiori serve --allow F:\Projects
+```powershell
+$env:SHIORI_MCP_TOKEN = "<32文字以上のランダム値>"
+$env:SHIORI_ALLOWED_WORKSPACES = "F:\Projects\Cupper;F:\Projects\Shiori"
 ```
 
 ---
@@ -1312,7 +1308,9 @@ shiori.toml
 
 ```toml
 [server]
-transport = "stdio"
+transport = "streamable_http"
+host = "127.0.0.1"
+port = 39473
 
 [search]
 default_limit = 20
@@ -1591,9 +1589,8 @@ debug
 trace
 ```
 
-stdio MCPではstdoutをMCP通信専用とする。
-
-ログはstderrへ出力する。
+Streamable HTTP MCPでは構造化ログを標準ログ出力へ出力する。
+検索文字列やソースコード本文、Bearer tokenはログへ出力しない。
 
 ---
 
@@ -1894,7 +1891,7 @@ Ranking
 Shiori v1完成条件：
 
 ```text
-MCP stdio server
+MCP Streamable HTTP server
 Workspace isolation
 SQLite database
 File index
