@@ -4,8 +4,8 @@
 
 ## 完成度
 
-- v1全体: **90%**（仕様書のv1完成条件20項目中18項目完了）
-- 現在のフェーズ: **v1 Client Integration — 0%**（2項目中0項目完了）
+- v1全体: **95%**（仕様書のv1完成条件20項目中19項目完了）
+- 現在のフェーズ: **v1 Client Integration — 50%**（2項目中1項目完了）
 
 ## Phase 2（完了）
 
@@ -23,11 +23,10 @@
 
 ## v1 Client Integration
 
-- [ ] Claude Code integration
+- [x] Claude Code integration
 - [ ] Codex integration
 
-Claude Code向け `.mcp.json` 生成とJSON検証は完了。Claude Code CLIが現在の
-検証環境に未導入のため、実クライアント接続確認後に完了へ変更する。
+Claude Code 2.1.233でStreamable HTTP接続と`search` Tool実行を確認済み。
 
 ## v1完了済み
 
@@ -37,8 +36,7 @@ Text search、Symbol search、File outline、Index status、CLI、Windows suppor
 
 ## v1残作業（優先順）
 
-1. Claude Code integration
-2. Codex integration
+1. Codex integration
 
 ## 算定基準
 
