@@ -5,6 +5,6 @@
 - [x] Unit tests, release build, and formatting pass
 - [x] Windows x64 ZIP generated and smoke-tested
 - [x] Changelog and release notes prepared
-- [ ] Commit and push release-preparation changes
+- [x] Commit and push release-preparation changes
 - [ ] Create signed or annotated `v1.0.0` tag
 - [ ] Publish GitHub Release with ZIP and release notes
