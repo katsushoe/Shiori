@@ -52,27 +52,62 @@ local health endpoint. Keep the server process running while clients use Shiori.
 
 ## Claude Code
 
-From the Claude Code project directory, generate project-scoped configuration:
+Save or merge this complete project-scoped configuration as `.mcp.json` in the
+Claude Code project root:
+
+```json
+{
+  "mcpServers": {
+    "shiori": {
+      "type": "http",
+      "url": "http://127.0.0.1:39473/mcp",
+      "headers": {
+        "Authorization": "Bearer ${SHIORI_MCP_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+`shiori` is the client-visible server name, `type` selects HTTP transport,
+`url` must use the port passed to `shiori serve`, and the authorization header
+reads the token from the client process environment. Do not replace the
+environment reference with the secret value.
+
+As a convenience, Shiori can generate the same JSON:
 
 ```powershell
 shiori config claude > .mcp.json
 ```
 
-Start Claude Code from an environment containing `SHIORI_MCP_TOKEN`, restart it
-after changing `.mcp.json`, and inspect `/mcp`. The generated JSON references the
-environment variable and does not contain its value.
+Use redirection only when creating a new file because it overwrites the file. If
+`.mcp.json` already exists, merge the generated `mcpServers.shiori` entry instead.
+Start Claude Code from an environment containing `SHIORI_MCP_TOKEN`, restart or
+reload it after changing the file, and inspect `/mcp`.
 
 ## Codex
 
-Generate the TOML section:
+Add this complete server section to `%USERPROFILE%\.codex\config.toml`:
+
+```toml
+[mcp_servers.shiori]
+url = "http://127.0.0.1:39473/mcp"
+bearer_token_env_var = "SHIORI_MCP_TOKEN"
+```
+
+`shiori` is the client-visible server name. An `url` selects HTTP transport and
+must use the port passed to `shiori serve`; no local start command is needed
+because Shiori runs separately. `bearer_token_env_var` tells Codex to read the
+bearer token from its process environment without storing the secret in TOML.
+
+As a convenience, Shiori can generate the same TOML section:
 
 ```powershell
 shiori config codex
 ```
 
-Merge the output into `%USERPROFILE%\.codex\config.toml`, ensure Codex receives
-`SHIORI_MCP_TOKEN`, and start a new task. The generated configuration uses
-`bearer_token_env_var = "SHIORI_MCP_TOKEN"`.
+Merge the output without replacing other Codex settings, ensure Codex receives
+`SHIORI_MCP_TOKEN`, then restart Codex or start a new task.
 
 ## Verify the Connection
 

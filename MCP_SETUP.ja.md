@@ -53,26 +53,61 @@ shiori serve --port 39473
 
 ## Claude Code
 
-Claude Codeのプロジェクトディレクトリで、プロジェクト設定を生成します。
+次の完全なプロジェクト設定を、Claude Codeプロジェクトルートの`.mcp.json`へ
+保存または統合します。
+
+```json
+{
+  "mcpServers": {
+    "shiori": {
+      "type": "http",
+      "url": "http://127.0.0.1:39473/mcp",
+      "headers": {
+        "Authorization": "Bearer ${SHIORI_MCP_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+`shiori`はクライアントに表示されるサーバー名、`type`はHTTP Transport、`url`は
+`shiori serve`へ渡したポートに合わせる接続先です。認証ヘッダーはクライアント
+プロセスの環境変数からトークンを参照します。秘密値へ置き換えないでください。
+
+簡便手段として、Shioriは同じJSONを生成できます。
 
 ```powershell
 shiori config claude > .mcp.json
 ```
 
-`SHIORI_MCP_TOKEN`を持つ環境からClaude Codeを起動します。`.mcp.json`変更後は
-再起動し、`/mcp`で確認します。生成JSONは環境変数を参照し、値を含みません。
+リダイレクトはファイルを上書きするため、新規作成時だけ使用してください。
+`.mcp.json`が存在する場合は、生成された`mcpServers.shiori`項目を統合します。
+`SHIORI_MCP_TOKEN`を持つ環境からClaude Codeを起動し、変更後は再起動または
+再読込して`/mcp`で確認します。
 
 ## Codex
 
-TOMLセクションを生成します。
+次の完全なサーバー設定を`%USERPROFILE%\.codex\config.toml`へ追加します。
+
+```toml
+[mcp_servers.shiori]
+url = "http://127.0.0.1:39473/mcp"
+bearer_token_env_var = "SHIORI_MCP_TOKEN"
+```
+
+`shiori`はクライアントに表示されるサーバー名です。`url`を指定するとHTTP
+Transportになり、`shiori serve`へ渡したポートに合わせます。Shioriは別プロセスで
+起動するためローカル起動Commandは不要です。`bearer_token_env_var`により、秘密値を
+TOMLへ保存せず、Codexプロセスの環境変数からベアラートークンを参照します。
+
+簡便手段として、Shioriは同じTOMLセクションを生成できます。
 
 ```powershell
 shiori config codex
 ```
 
-出力を`%USERPROFILE%\.codex\config.toml`へ統合し、Codexへ
-`SHIORI_MCP_TOKEN`を渡して新しいタスクを開始します。生成設定は
-`bearer_token_env_var = "SHIORI_MCP_TOKEN"`を使用します。
+他のCodex設定を置き換えずに出力を統合し、Codexへ`SHIORI_MCP_TOKEN`を渡して、
+Codexを再起動するか新しいタスクを開始します。
 
 ## 接続確認
 
