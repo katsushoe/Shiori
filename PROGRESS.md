@@ -5,7 +5,7 @@
 ## 完成度
 
 - v1全体: **90%**（仕様書のv1完成条件20項目中18項目完了）
-- 現在のフェーズ: **Phase 3 — 100%**（3項目中3項目完了）
+- 現在のフェーズ: **v1 Client Integration — 0%**（2項目中0項目完了）
 
 ## Phase 2（完了）
 
@@ -15,11 +15,16 @@
 - [x] Incremental index
 - [x] File watcher
 
-## Phase 3
+## Phase 3（完了）
 
 - [x] Query Planner
 - [x] Unified search
 - [x] Ranking
+
+## v1 Client Integration
+
+- [ ] Claude Code integration
+- [ ] Codex integration
 
 ## v1完了済み
 
