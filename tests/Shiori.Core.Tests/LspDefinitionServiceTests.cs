@@ -80,6 +80,36 @@ public sealed class LspDefinitionServiceTests : IDisposable
         Assert.Empty(response.Locations);
     }
 
+    [Fact]
+    public async Task NavigateAsync_requests_references_with_declarations_and_limit()
+    {
+        var source = CreateFile("Source.cs");
+        var first = CreateFile("First.cs");
+        var second = CreateFile("Second.cs");
+        var router = new FakeRouter(JsonSerializer.SerializeToElement(new[]
+        {
+            new
+            {
+                uri = new Uri(first).AbsoluteUri,
+                range = new { start = new { line = 1, character = 1 } },
+            },
+            new
+            {
+                uri = new Uri(second).AbsoluteUri,
+                range = new { start = new { line = 2, character = 2 } },
+            },
+        }));
+
+        var response = await LspNavigationService.NavigateAsync(
+            router, _workspace, source, 4, 5, "references", 1, _descriptor);
+
+        Assert.True(response.Success);
+        Assert.Equal("textDocument/references", router.Method);
+        Assert.True(router.Parameters.GetProperty("context").GetProperty("includeDeclaration").GetBoolean());
+        Assert.Single(response.Locations);
+        Assert.Equal("First.cs", response.Locations[0].Path);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_workspace))
@@ -113,6 +143,8 @@ public sealed class LspDefinitionServiceTests : IDisposable
 
         internal JsonElement Parameters { get; private set; }
 
+        internal string? Method { get; private set; }
+
         public Task<JsonElement> SendRequestAsync(
             LanguageServerDescriptor descriptor,
             string workspace,
@@ -120,6 +152,7 @@ public sealed class LspDefinitionServiceTests : IDisposable
             object? parameters,
             CancellationToken cancellationToken = default)
         {
+            Method = method;
             Parameters = JsonSerializer.SerializeToElement(parameters);
             return _exception is null
                 ? Task.FromResult(_result)

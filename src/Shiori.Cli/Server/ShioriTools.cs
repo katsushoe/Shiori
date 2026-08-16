@@ -12,23 +12,19 @@ internal sealed class ShioriTools
     [McpServerTool(Name = "navigate", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Navigates from a source position using a lazily started language server.")]
     public static Task<NavigationResponse> Navigate(
-        [Description("Navigation action. Definition is currently supported.")] string action,
+        [Description("Navigation action: definition or references.")] string action,
         [Description("Absolute path of the allowed workspace.")] string workspace,
         [Description("Relative or absolute source-file path inside the workspace.")] string file,
         [Description("One-based source line.")] int line,
         [Description("One-based source column.")] int column,
         NativeEngineRegistry registry,
         LspServerManager lspServers,
+        [Description("Maximum results from 1 to 100.")] int limit = 20,
         CancellationToken cancellationToken = default)
     {
-        if (!string.Equals(action, "definition", StringComparison.Ordinal))
-        {
-            throw new ArgumentException("Only the definition action is currently supported.", nameof(action));
-        }
-
         _ = registry.GetEngine(workspace);
-        return LspDefinitionService.FindAsync(
-            lspServers, workspace, file, line, column, cancellationToken: cancellationToken);
+        return LspNavigationService.NavigateAsync(
+            lspServers, workspace, file, line, column, action, limit, cancellationToken: cancellationToken);
     }
 
     [McpServerTool(Name = "search", ReadOnly = true, Idempotent = true, OpenWorld = false)]

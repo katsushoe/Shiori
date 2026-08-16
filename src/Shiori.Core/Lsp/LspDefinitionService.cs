@@ -2,24 +2,35 @@ using System.Text.Json;
 
 namespace Shiori.Core.Lsp;
 
-/// <summary>Resolves source definitions through an available language server.</summary>
-public static class LspDefinitionService
+/// <summary>Resolves semantic-navigation actions through an available language server.</summary>
+public static class LspNavigationService
 {
-    /// <summary>Finds definitions for a one-based source position.</summary>
-    public static async Task<NavigationResponse> FindAsync(
+    /// <summary>Runs a supported navigation action for a one-based source position.</summary>
+    public static async Task<NavigationResponse> NavigateAsync(
         ILspRequestRouter router,
         string workspace,
         string file,
         int line,
         int column,
+        string action,
+        int limit = 20,
         LanguageServerDescriptor? descriptor = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(router);
         ArgumentException.ThrowIfNullOrWhiteSpace(workspace);
         ArgumentException.ThrowIfNullOrWhiteSpace(file);
+        ArgumentException.ThrowIfNullOrWhiteSpace(action);
         ArgumentOutOfRangeException.ThrowIfLessThan(line, 1);
         ArgumentOutOfRangeException.ThrowIfLessThan(column, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(limit, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(limit, 100);
+        var method = action switch
+        {
+            "definition" => "textDocument/definition",
+            "references" => "textDocument/references",
+            _ => throw new ArgumentException($"Unsupported navigation action: {action}", nameof(action)),
+        };
 
         var canonicalWorkspace = Path.GetFullPath(workspace);
         var sourcePath = ResolveWorkspacePath(canonicalWorkspace, file);
@@ -39,19 +50,15 @@ public static class LspDefinitionService
             var result = await router.SendRequestAsync(
                 descriptor,
                 canonicalWorkspace,
-                "textDocument/definition",
-                new
-                {
-                    textDocument = new { uri = new Uri(sourcePath).AbsoluteUri },
-                    position = new { line = line - 1, character = column - 1 },
-                },
+                method,
+                CreateParameters(action, sourcePath, line, column),
                 cancellationToken).ConfigureAwait(false);
             return new NavigationResponse(
                 true,
                 null,
                 null,
                 false,
-                ParseLocations(result, canonicalWorkspace));
+                ParseLocations(result, canonicalWorkspace, limit));
         }
         catch (Exception exception) when (exception is FileNotFoundException or IOException
             or LspProtocolException or InvalidOperationException or ObjectDisposedException)
@@ -60,9 +67,19 @@ public static class LspDefinitionService
         }
     }
 
+    private static object CreateParameters(string action, string sourcePath, int line, int column)
+    {
+        var textDocument = new { uri = new Uri(sourcePath).AbsoluteUri };
+        var position = new { line = line - 1, character = column - 1 };
+        return action == "references"
+            ? new { textDocument, position, context = new { includeDeclaration = true } }
+            : (object)new { textDocument, position };
+    }
+
     private static IReadOnlyList<NavigationLocation> ParseLocations(
         JsonElement result,
-        string workspace)
+        string workspace,
+        int limit)
     {
         if (result.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined) return [];
         IEnumerable<JsonElement> locations = result.ValueKind == JsonValueKind.Array
@@ -73,6 +90,7 @@ public static class LspDefinitionService
             .Where(location => location is not null)
             .Cast<NavigationLocation>()
             .Distinct()
+            .Take(limit)
             .ToArray();
     }
 

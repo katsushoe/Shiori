@@ -43,18 +43,20 @@ static int Run(string[] arguments)
 
 static int RunNavigate(string[] arguments)
 {
-    if (arguments.Length < 2 || !string.Equals(arguments[0], "definition", StringComparison.Ordinal))
-        return Fail("navigate requires definition and a source-file path.");
+    if (arguments.Length < 2 || arguments[0] is not ("definition" or "references"))
+        return Fail("navigate requires definition or references and a source-file path.");
     var workspace = GetOption(arguments, "--allow")
         ?? throw new ArgumentException("--allow is required.");
     var line = int.TryParse(GetOption(arguments, "--line"), out var parsedLine) ? parsedLine : 0;
     var column = int.TryParse(GetOption(arguments, "--column"), out var parsedColumn) ? parsedColumn : 0;
+    var limit = int.TryParse(GetOption(arguments, "--limit"), out var parsedLimit) ? parsedLimit : 20;
     var descriptor = CSharpLanguageServerDiscovery.Find();
     var manager = new LspServerManager(new ProcessLspServerConnectionFactory());
     try
     {
-        var response = LspDefinitionService.FindAsync(
-            manager, workspace, arguments[1], line, column, descriptor).GetAwaiter().GetResult();
+        var response = LspNavigationService.NavigateAsync(
+            manager, workspace, arguments[1], line, column, arguments[0], limit, descriptor)
+            .GetAwaiter().GetResult();
         Console.WriteLine(JsonSerializer.Serialize(response, new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -252,7 +254,8 @@ static string Usage() => """
       shiori index build --allow <directory>
       shiori index status --allow <directory>
       shiori index rebuild --allow <directory>
-      shiori navigate definition <file> --line <one-based> --column <one-based> --allow <directory>
+      shiori navigate <definition|references> <file> --line <one-based> --column <one-based>
+        --allow <directory> [--limit <1-100>]
       shiori outline <source-file> --allow <directory>
       shiori symbol <query> --allow <directory> [--kind <kind>] [--language <language>]
         [--path <path>] [--limit <1-100>]
