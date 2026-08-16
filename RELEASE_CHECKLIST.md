@@ -6,5 +6,5 @@
 - [x] Windows x64 ZIP generated and smoke-tested
 - [x] Changelog and release notes prepared
 - [x] Commit and push release-preparation changes
-- [ ] Create signed or annotated `v1.0.0` tag
+- [x] Create signed or annotated `v1.0.0` tag
 - [ ] Publish GitHub Release with ZIP and release notes
