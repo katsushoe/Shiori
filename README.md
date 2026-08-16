@@ -49,7 +49,8 @@ if ($actual -ne $expected) { throw "Checksum mismatch" }
 ### Build from source
 
 Install the .NET 10 SDK, Rust stable toolchain, Visual Studio 2022 C++ Build
-Tools, Git, and optionally Inno Setup 6. Then clone and build:
+Tools, Git, and optionally the WiX Toolset CLI (`dotnet tool install --global
+wix`). Then clone and build:
 
 ```powershell
 git clone https://github.com/katsushoe/Shiori.git
@@ -62,7 +63,7 @@ dotnet test .\tests\Shiori.Core.Tests\Shiori.Core.Tests.csproj --configuration R
 ```
 
 The publish script writes the installer, ZIP, and checksum files to
-`artifacts/`. Use `-SkipInstaller` when Inno Setup is not installed.
+`artifacts/`. Use `-SkipInstaller` when the WiX Toolset CLI is not installed.
 
 ## Configuration
 

@@ -4,6 +4,12 @@ All notable changes to Shiori are documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Replaced the Inno Setup Windows installer with a WiX Toolset MSI
+  (`installer/Shiori.wxs`), keeping the same per-user install location,
+  `bin`/`config`/`logs`/`data` layout, and PATH registration.
+
 ## [1.1.3] - 2026-08-17
 
 ### Added

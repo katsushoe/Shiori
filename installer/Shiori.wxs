@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AppVersion and SourceDirectory are supplied on the command line, e.g.:
+  wix build -arch x64 -d AppVersion=1.1.3 -d SourceDirectory=<publish dir> -out out.msi Shiori.wxs
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Id="Shiori"
+           Name="Shiori"
+           Version="$(var.AppVersion)"
+           Manufacturer="Shiori contributors"
+           UpgradeCode="9f1d00d3-d780-45ad-9c10-34c2e2e9edb4"
+           Scope="perUser">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Shiori is already installed." />
+
+    <Icon Id="ShioriExeIcon" SourceFile="$(var.SourceDirectory)\bin\shiori.exe" />
+    <Property Id="ARPPRODUCTICON" Value="ShioriExeIcon" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/katsushoe/Shiori/issues" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/katsushoe/Shiori" />
+    <Property Id="ARPURLUPDATEINFO" Value="https://github.com/katsushoe/Shiori/releases" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="Shiori">
+          <Directory Id="BINFOLDER" Name="bin" />
+          <Directory Id="CONFIGFOLDER" Name="config" />
+          <Directory Id="LOGSFOLDER" Name="logs" />
+          <Directory Id="DATAFOLDER" Name="data" />
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <ComponentGroup Id="BinFiles" Directory="BINFOLDER" Source="$(var.SourceDirectory)\bin">
+      <Files Include="**" />
+    </ComponentGroup>
+
+    <ComponentGroup Id="DocFiles" Directory="INSTALLFOLDER" Source="$(var.SourceDirectory)">
+      <Files Include="README.md" />
+      <Files Include="LICENSE" />
+      <Files Include="CHANGELOG.md" />
+      <Files Include="RELEASE_NOTES.md" />
+    </ComponentGroup>
+
+    <!--
+      config/logs/data are created empty and never explicitly removed by this
+      installer; Windows Installer only removes an empty directory on
+      uninstall, so files the running application writes there survive
+      upgrade and uninstall.
+    -->
+    <Component Id="PreserveConfigDirectory" Directory="CONFIGFOLDER" Guid="fe1496ac-c6bd-48d2-aeb0-acc21f9ba80f">
+      <CreateFolder />
+    </Component>
+    <Component Id="PreserveLogsDirectory" Directory="LOGSFOLDER" Guid="128795bb-ede7-443f-9f89-8750b9baca8d">
+      <CreateFolder />
+    </Component>
+    <Component Id="PreserveDataDirectory" Directory="DATAFOLDER" Guid="9fac7196-39ea-4d3e-a164-614ffaff0adc">
+      <CreateFolder />
+    </Component>
+
+    <Component Id="PathEnvironment" Directory="BINFOLDER" Guid="e7a55032-6253-442f-a16a-83baa5635697">
+      <Environment Id="AddBinToPath" Name="PATH" Action="set" Part="last" Value="[BINFOLDER]" System="no" Permanent="no" />
+    </Component>
+
+    <Feature Id="MainFeature" Title="Shiori" Level="1">
+      <ComponentGroupRef Id="BinFiles" />
+      <ComponentGroupRef Id="DocFiles" />
+      <ComponentRef Id="PreserveConfigDirectory" />
+      <ComponentRef Id="PreserveLogsDirectory" />
+      <ComponentRef Id="PreserveDataDirectory" />
+      <ComponentRef Id="PathEnvironment" />
+    </Feature>
+  </Package>
+</Wix>
