@@ -18,7 +18,6 @@ Shioriは、Claude CodeやCodexなどのAI Coding Agentに対して、ローカ�
 
 Shioriでは、
 
-* Everything
 * ripgrep
 * SQLite
 * Tree-sitter
@@ -33,7 +32,7 @@ Claude Code / Codex
         ▼
       Shiori
         │
-        ├── File Search ───── Everything / SQLite
+        ├── File Search ───── SQLite
         ├── Text Search ───── ripgrep
         ├── Symbol Search ─── Tree-sitter + SQLite FTS5
         ├── AST Search ────── Tree-sitter
@@ -177,8 +176,8 @@ Shioriはあくまで
 │ Search Search   Search   Search   Nav  │
 │   │      │        │        │       │   │
 │   ▼      ▼        ▼        ▼       ▼   │
-│Everything rg     SQLite  Tree-   LSP   │
-│ SQLite            FTS5   sitter Server │
+│ SQLite  rg       SQLite  Tree-   LSP   │
+│                   FTS5   sitter Server │
 │                                        │
 │          Index Manager                 │
 │               │                        │
@@ -259,23 +258,13 @@ Query Plannerは必要に応じて複数エンジンを並列実行する。
 
 ファイル名・パス検索を担当する。
 
-## Windows
-
-優先順位：
+## Windows / Linux / macOS
 
 ```text
-Everything
-    ↓
 SQLite File Index
     ↓
 filesystem walk
 ```
-
-Everythingが利用可能な場合は最優先する。
-
-Everythingがインストールされていない環境でもShioriは正常動作すること。
-
-## Linux / macOS
 
 SQLite File Indexを標準とする。
 
@@ -1043,9 +1032,6 @@ ripgrep
 Shioriは一部外部ツールがなくても動作する。
 
 ```text
-Everything unavailable
-    → SQLite
-
 ripgrep unavailable
     → internal filesystem search
 
@@ -1260,7 +1246,6 @@ shiori doctor
 ```text
 SQLite
 ripgrep
-Everything
 Tree-sitter parsers
 LSP servers
 workspace permissions
@@ -1320,9 +1305,6 @@ max_limit = 100
 watch = true
 gitignore = true
 
-[everything]
-mode = "auto"
-
 [ripgrep]
 enabled = true
 
@@ -1340,9 +1322,7 @@ path = "F:\\Projects"
 
 ---
 
-# 35. Everything Provider
-
-WindowsではEverythingをoptional acceleratorとして利用する。
+# 35. File Search Provider
 
 Provider interface：
 
@@ -1353,12 +1333,11 @@ FileSearchProvider
 実装：
 
 ```text
-EverythingProvider
 SQLiteProvider
 FilesystemProvider
 ```
 
-これによりEverythingへの依存をShiori Coreから分離する。
+SQLiteを標準providerとし、利用不能時はFilesystemProviderへフォールバックする。
 
 ---
 
@@ -1713,8 +1692,6 @@ shiori/
 │  │
 │  ├─ shiori-ripgrep/
 │  │
-│  ├─ shiori-everything/
-│  │
 │  ├─ shiori-mcp/
 │  │
 │  └─ shiori-cli/
@@ -1760,10 +1737,10 @@ Tree-sitter
 ripgrep
 ```
 
-Windowsファイル検索：
+ファイル検索：
 
 ```text
-Everything
+SQLite
 ```
 
 Semantic Navigation：
@@ -1895,7 +1872,6 @@ MCP Streamable HTTP server
 Workspace isolation
 SQLite database
 File index
-Everything optional integration
 ripgrep search
 Tree-sitter parsing
 Symbol index
@@ -2002,8 +1978,8 @@ Shioriは単なる検索コマンドラッパーではない。
        ▼            ▼            ▼
    File Index   Code Index   Semantic Nav
        │            │            │
- Everything     Tree-sitter      LSP
- SQLite         SQLite FTS5
+   SQLite       Tree-sitter      LSP
+                SQLite FTS5
                     │
                     ▼
                  ripgrep
@@ -2050,7 +2026,6 @@ Phase 3
 Query Planner
 Unified search
 Ranking
-Everything integration
 
         ↓
 
