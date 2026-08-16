@@ -34,7 +34,7 @@ checksum under `artifacts/`.
 
 ```bash
 dotnet restore
-bash scripts/publish-macos.sh 1.1.0
+bash scripts/publish-macos.sh 1.1.1
 ```
 
 The package is framework-dependent and contains `libshiori_engine.dylib` beside

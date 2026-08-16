@@ -1,137 +1,116 @@
 # Shiori
 
-Shiori is a fast, local-first file search server for AI agents, with indexed
-code search and navigation capabilities.
+Shiori is a fast, local-first file search server for AI coding agents. Indexed
+code search and semantic navigation are available as secondary capabilities.
+The server exposes a single Streamable HTTP MCP endpoint and keeps independent
+SQLite indexes for each workspace.
 
-The C# host owns MCP, CLI, configuration, and query planning. A Rust Native DLL
-owns performance-sensitive search, indexing, SQLite, and Tree-sitter operations
-behind a versioned C ABI.
+Product version: `1.1.1`.
 
-Product version: `1.1.0`.
+## Getting Started
 
-## Commands
+1. Install Shiori using one of the methods below.
+2. Configure the MCP bearer token and allowed workspaces.
+3. Build the initial index for each workspace.
+4. Start the server and connect your AI coding agent.
 
-```text
-dotnet run --project src/Shiori.Cli -- ast <tree-sitter-query> --language <language> --allow <directory> [--path <path>] [--limit <count>]
-dotnet run --project src/Shiori.Cli -- find <query> --allow <directory> [--limit <count>]
-dotnet run --project src/Shiori.Cli -- search <query> --allow <directory> [--path <path>] [--limit <count>]
-dotnet run --project src/Shiori.Cli -- grep <query> --allow <directory> [--glob <glob>] [--regex]
-dotnet run --project src/Shiori.Cli -- index build --allow <directory>
-dotnet run --project src/Shiori.Cli -- index status --allow <directory>
-dotnet run --project src/Shiori.Cli -- index rebuild --allow <directory>
-dotnet run --project src/Shiori.Cli -- navigate <definition|references|implementations|callers|callees> <file> --line <line> --column <column> --allow <directory>
-dotnet run --project src/Shiori.Cli -- outline <source-file> --allow <directory>
-dotnet run --project src/Shiori.Cli -- symbol <query> --allow <directory> [--kind <kind>] [--language <language>]
-dotnet run --project src/Shiori.Cli -- workspace add <absolute-directory>
-dotnet run --project src/Shiori.Cli -- workspace list
-dotnet run --project src/Shiori.Cli -- workspace remove <name-or-id-or-absolute-directory>
-dotnet run --project src/Shiori.Cli -- doctor
-dotnet run --project src/Shiori.Cli -- config claude > .mcp.json
-dotnet run --project src/Shiori.Cli -- config codex
-dotnet run --project src/Shiori.Cli -- serve --port 39473
+## Installation
+
+### Windows installer
+
+Download `shiori-v1.1.1-win-x64-setup.exe` from the
+[latest release](https://github.com/katsushoe/Shiori/releases/latest), run it,
+and keep **Add Shiori to the current user's PATH** selected. The installer is
+self-contained, installs only for the current user, and can be removed from
+Windows **Installed apps**. Open a new terminal after installation.
+
+```powershell
+shiori doctor
 ```
 
-The server exposes one stateless Streamable HTTP endpoint at
-`http://127.0.0.1:39473/mcp`. Set `SHIORI_MCP_TOKEN` to a random value of at
-least 32 characters and `SHIORI_ALLOWED_WORKSPACES` to a path-list-separated
-list of absolute workspace paths before starting it. Use the OS path-list
-separator: `;` on Windows and `:` on macOS or Linux.
+### ZIP binary
 
-Opening a configured workspace creates its SQLite database under the platform
-data directory (`%LOCALAPPDATA%\Shiori\indexes\<workspace-id>\shiori.db` on
-Windows and `~/Library/Application Support/Shiori/indexes/<workspace-id>/shiori.db`
-on macOS). File indexing honors `.gitignore` plus Shiori's default build and
-dependency-directory exclusions. File-name searches lazily build and then use
-this persistent index. Running `index build` on a ready workspace performs an
-incremental scan: unchanged files are retained, content hashes confirm metadata
-changes, and only added, changed, or deleted files update SQLite and symbols.
-The MCP server watches allowed workspaces recursively and debounces bursts of
-create, modify, rename, and delete events into incremental index builds.
+Download `shiori-v1.1.1-win-x64.zip` from the latest release, verify the adjacent
+SHA-256 file, extract it to a permanent directory, and add that directory to
+your user `PATH`. The ZIP is self-contained and does not require a separate .NET
+installation.
 
-The MCP server exposes `search`, `search_ast`, `navigate`, `workspace_list`, `index_status`, `reindex`,
-`update_indexes`, `search_files`, `search_text`, `search_symbols`, and `file_outline`. `reindex`
-builds one missing index by default; set `force` to `true` to run a full rescan.
+```powershell
+$expected = (Get-Content .\shiori-v1.1.1-win-x64.zip.sha256).Split()[0]
+$actual = (Get-FileHash .\shiori-v1.1.1-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actual -ne $expected) { throw "Checksum mismatch" }
+```
 
-`search_files` accepts one workspace, several workspace paths, or neither selector to search every
-allowed workspace. The MCP host fans work out as bounded ThreadPool tasks to the persistent Engine
-and SQLite database for each workspace, then merges globally limited results with workspace IDs,
-names, and roots. `update_indexes` incrementally updates selected or all allowed workspace databases
-in parallel, serializes competing updates for the same workspace, and responds after every update
-has finished. See [`ADR 0002`](docs/adr/0002-multi-workspace-coordination.md).
+### Build from source
 
-File-name and path discovery through `search_files` is Shiori's primary capability. Indexed symbol,
-AST, text, and semantic navigation tools are secondary capabilities used when an agent needs to
-inspect or navigate code after locating the relevant files.
+Install the .NET 10 SDK, Rust stable toolchain, Visual Studio 2022 C++ Build
+Tools, Git, and optionally Inno Setup 6. Then clone and build:
 
-The managed query planner classifies file paths, code identifiers, quoted text,
-and reference or implementation intent into deterministic file, symbol, and
-text-provider plans. The unified `search` tool executes selected providers in
-parallel, ranks exact and prefix symbol matches ahead of filenames, paths, and
-text matches, deduplicates code locations, and reports recoverable provider errors.
+```powershell
+git clone https://github.com/katsushoe/Shiori.git
+Set-Location Shiori
+cargo build --release --manifest-path .\native\shiori-engine\Cargo.toml
+dotnet restore .\Shiori.slnx
+dotnet build .\Shiori.slnx --configuration Release --no-restore
+dotnet test .\Shiori.slnx --configuration Release --no-build
+.\scripts\Publish-Windows.ps1 -Version 1.1.1
+```
 
-CLI workspace registrations are stored in the current user's local application
-data directory. Removing a registration preserves its SQLite index database.
-Registrations do not grant MCP access; `SHIORI_ALLOWED_WORKSPACES` remains the
-server authorization boundary.
+The publish script writes the installer, ZIP, and checksum files to
+`artifacts/`. Use `-SkipInstaller` when Inno Setup is not installed.
 
-Set `SHIORI_DATA_HOME` to override the shared workspace-registry and index-data
-directory, for example when running Shiori in an isolated environment.
+## Initial Configuration
 
-`doctor` reports Native DLL/ABI, SQLite quick-check and FTS5 support, ripgrep,
-Tree-sitter grammar availability, data-directory write access, and MCP
-environment configuration as structured JSON. Missing optional MCP settings
-produce warnings; required runtime failures return exit code 1.
+Create a random token of at least 32 characters and list every directory that
+the MCP server may access. Windows separates workspace paths with `;`.
 
-Tree-sitter language detection supports C#, TypeScript/TSX, JavaScript, Python,
-Rust, Go, Java, C, and C++ in the v1 parser set.
-Full index builds extract namespaces/modules, types, functions, methods,
-constructors, properties, fields, and constants into SQLite `symbols` while
-maintaining parent and qualified-name relationships.
+```powershell
+$env:SHIORI_MCP_TOKEN = ([guid]::NewGuid().ToString('N'))
+$env:SHIORI_ALLOWED_WORKSPACES = 'F:\Projects\ProjectA;F:\Projects\ProjectB'
+shiori doctor
+```
 
-For v1.1 semantic navigation, `doctor` discovers `csharp-ls` or `OmniSharp` on
-`PATH`. Set `SHIORI_CSHARP_LSP_PATH` to an absolute executable path to select a
-specific C# language server. Discovery does not start the server; LSP processes
-remain lazy and are started only by semantic-navigation tools.
-`navigate` supports the `definition`, `references`, `implementations`, `callers`,
-and `callees` actions. Call hierarchy uses LSP prepare plus incoming or outgoing
-calls. Reference results include declarations. Navigation accepts `--limit` from
-1 to 100. Input lines and columns are one-based; results use workspace-relative
-paths and one-based positions.
+Persist these values using a secure user-level environment configuration if
+the server must survive terminal restarts. Registrations made by `workspace add`
+do not grant MCP access. See [CONFIG.md](CONFIG.md) for every setting.
 
-`search_ast` accepts a Tree-sitter query for one supported language and returns
-captured node paths, one-based positions, capture names, node kinds, and bounded
-single-line snippets. Optional `path` and `limit` arguments constrain the scan.
+## Build the Initial Index
 
-## Claude Code
+Build one independent index for each workspace before the first search:
 
-Run `shiori config claude > .mcp.json` in the Claude Code project, set
-`SHIORI_MCP_TOKEN` to the same bearer token used by the running Shiori server,
-then restart Claude Code and inspect `/mcp`. The generated project-scoped config
-uses Streamable HTTP at `http://127.0.0.1:39473/mcp` and references the token by
-environment variable instead of writing its value to disk.
+```powershell
+shiori index build --allow F:\Projects\ProjectA
+shiori index build --allow F:\Projects\ProjectB
+shiori index status --allow F:\Projects\ProjectA
+```
 
-## Codex
+Later `index build` calls are incremental. For MCP clients, `update_indexes`
+updates selected or all allowed workspaces and returns after completion.
 
-Run `shiori config codex` and merge the generated TOML into
-`%USERPROFILE%\.codex\config.toml`. Set `SHIORI_MCP_TOKEN` to the same bearer
-token used by the running Shiori server, then start a new Codex task. The
-generated config uses Streamable HTTP at `http://127.0.0.1:39473/mcp` and reads
-the token from the environment without writing its value to disk.
+## Start and Connect
 
-Set `SHIORI_EXCLUDE_PATTERNS` to semicolon-separated gitignore-style glob
-patterns (for example, `generated/**;*.min.js`) to add workspace exclusions.
+```powershell
+shiori serve --port 39473
+```
 
-Build `native/shiori-engine` as a `cdylib` and place the resulting
-`shiori_engine` native library beside the managed executable. Search operations
-never read outside the canonical `--allow` workspace.
+The MCP endpoint is `http://127.0.0.1:39473/mcp`. Generate client configuration
+with `shiori config claude` or `shiori config codex`; both reference the token by
+environment-variable name and never embed its value.
 
-## Release package
+## Documentation
 
-On Windows x64, run `scripts/Publish-Windows.ps1` to build the Rust engine and
-the framework-dependent .NET host. The generated ZIP is written under
-`artifacts/` and requires the .NET 10 runtime.
+- [CLI command reference](COMMANDS.md)
+- [Configuration reference](CONFIG.md)
+- [Architecture](docs/architecture.md)
+- [Specification](docs/specification.md)
+- [Multi-workspace coordination ADR](docs/adr/0002-multi-workspace-coordination.md)
 
-On macOS 15, run `scripts/publish-macos.sh` to generate a framework-dependent
-Apple Silicon (`osx-arm64`) or Intel (`osx-x64`) TAR.GZ package and SHA-256
-checksum. Both architectures are continuously tested and package-smoke-tested;
-see [`docs/macos.md`](docs/macos.md) for installation and build details.
+## Security
+
+Shiori listens only on loopback, requires bearer authentication for MCP, and
+rejects access outside explicitly allowed workspace roots. Do not commit bearer
+tokens or real environment settings.
+
+## License
+
+Shiori is licensed under the [MIT License](LICENSE).

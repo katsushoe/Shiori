@@ -1,5 +1,6 @@
 param(
-    [string]$Version = "1.1.0"
+    [string]$Version = "1.1.1",
+    [switch]$SkipInstaller
 )
 
 $ErrorActionPreference = "Stop"
@@ -25,9 +26,10 @@ if ($LASTEXITCODE -ne 0) {
 
 dotnet publish (Join-Path $repoRoot "src\Shiori.Cli\Shiori.Cli.csproj") `
     --configuration Release `
+    --runtime win-x64 `
     --output $publishDirectory `
-    --self-contained false `
-    --no-restore
+    --disable-build-servers `
+    --self-contained true
 if ($LASTEXITCODE -ne 0) {
     throw ".NET publish failed with exit code $LASTEXITCODE."
 }
@@ -49,3 +51,9 @@ $checksumPath = "$archivePath.sha256"
 Set-Content -LiteralPath $checksumPath -Value "$hash  $packageName.zip" -Encoding ascii
 Write-Output $archivePath
 Write-Output $checksumPath
+
+if (-not $SkipInstaller) {
+    & (Join-Path $PSScriptRoot "Build-WindowsInstaller.ps1") `
+        -Version $Version `
+        -PublishDirectory $publishDirectory
+}

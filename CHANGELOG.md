@@ -2,6 +2,21 @@
 
 All notable changes to Shiori are documented in this file.
 
+## [1.1.1] - 2026-08-17
+
+### Added
+
+- Windows x64 installer with per-user installation, optional PATH registration,
+  and clean uninstall support.
+- Dedicated CLI command and runtime configuration reference documents.
+
+### Changed
+
+- Windows ZIP and installer packages are self-contained and no longer require a
+  separately installed .NET runtime.
+- Reorganized the README around installation, initial configuration, and the
+  first index build.
+
 ## [1.1.0] - 2026-08-17
 
 ### Added
