@@ -1,7 +1,7 @@
 # Shiori 仕様書
 
 **開発コード名:** Shiori
-**種別:** Code Search / Code Navigation MCP Server
+**種別:** File Search MCP Server（Code Search / Code Navigation対応）
 **対象:** Claude Code / OpenAI Codex / その他MCP対応AI Coding Agent
 **想定ライセンス:** 未定
 **推奨実装言語:** Rust
@@ -12,7 +12,9 @@
 
 ## 1. 概要
 
-Shioriは、Claude CodeやCodexなどのAI Coding Agentに対して、ローカルコードベースを高速に検索・解析・ナビゲーションする機能を提供するMCPサーバである。
+Shioriは、Claude CodeやCodexなどのAI Agentに対して、許可されたローカルworkspace内の
+ファイル名とパスを高速に検索するMCPサーバである。コード検索・解析・ナビゲーションは、
+発見したファイルを詳しく調べるための補助機能として提供する。
 
 通常のAI Coding Agentは、ファイル探索、grep、ファイル読み込みを繰り返しながら目的のコードへ到達する。
 
@@ -41,7 +43,7 @@ Claude Code / Codex
 
 目的は単純に`grep`をMCP化することではない。
 
-**「AIが目的のコードへ到達するまでに必要な検索回数・時間・トークン数を減らす」**
+**「AIが目的のファイルへ到達するまでに必要な検索回数・時間・トークン数を減らす」**
 
 ことをShioriの主要目的とする。
 
@@ -59,11 +61,11 @@ Claude Code / Codex
 
 英語説明例：
 
-> Fast local code search and navigation MCP server for AI coding agents.
+> Fast local-first file search server for AI agents, with indexed code search and navigation.
 
 GitHub Description案：
 
-> Fast local code search and navigation MCP server for Claude Code, Codex, and other AI coding agents.
+> Fast local-first file search server for Claude Code, Codex, and other AI agents, with indexed code search and navigation capabilities.
 
 ---
 
@@ -122,7 +124,7 @@ Shiori起動直後はripgrepなどを使用して検索し、インデックス�
 
 ### 読み取り専用
 
-ShioriはCode Search / Code Navigationに特化する。
+Shioriは読み取り専用のFile Searchを主機能とし、Code Search / Code Navigationを補助機能とする。
 
 ソースコード変更機能は持たない。
 
@@ -148,7 +150,7 @@ v1では以下を対象外とする。
 
 Shioriはあくまで
 
-**「高速なコード探索レイヤー」**
+**「高速なローカルファイル探索レイヤー」**
 
 として設計する。
 
@@ -745,7 +747,7 @@ AI AgentがTool選択に迷わない構造とする。
 
 ## `search`
 
-Shioriの推奨検索Tool。
+コード内容やシンボルを調べるための補助検索Tool。
 
 Query Plannerが検索方式を自動決定する。
 
@@ -773,15 +775,17 @@ text
 
 ## `search_files`
 
-ファイル名・パス検索。
+Shioriの主機能であり、AIがファイルを探すときに最初に使用する推奨Tool。
+ファイル名・パスを検索し、`workspace`、`workspaces`のいずれも省略した場合は、
+許可済み全workspaceを検索する。複数workspaceはMCPサーバ側でTaskへfan-outし、
+workspace識別情報を付けて統合・ランキングする。
 
 入力：
 
 ```text
 query
-workspace
-extension
-glob
+workspace（任意、単一workspace互換）
+workspaces（任意、複数workspace）
 limit
 ```
 
@@ -900,6 +904,21 @@ workspace
 path
 force
 ```
+
+---
+
+## `update_indexes`
+
+ユーザーが「検索DBを更新する」と依頼したとき、指定または許可済み全workspaceの
+検索DBを更新する。既定は差分更新とし、すべての対象が完了してから応答する。
+
+```text
+workspaces（省略時は許可済み全workspace）
+force（trueの場合は全再構築）
+```
+
+異なるworkspaceは並列更新し、同一workspaceへの更新要求は直列化する。
+一部のworkspaceが失敗しても、成功結果とworkspace別エラーを構造化して返す。
 
 ---
 
@@ -1066,6 +1085,11 @@ F:\Projects
 ```
 
 を1つのworkspaceとして登録することも可能とする。
+
+各workspaceは独立したSQLite DBと遅延生成されるNative Engineを持つ。
+複数workspace検索では共有DBへ統合せず、MCPサーバのCoordinatorがThreadPool上の
+Taskとして各Engineを並列実行し、結果をfan-inする。専用AI Agentやworkspace数分の
+常駐OSスレッドは生成しない。詳細はADR 0002を正本とする。
 
 ---
 
@@ -1658,6 +1682,10 @@ search("AccountDTO")
 
 を並列実行し、最後に統合ランキングする。
 
+複数workspaceが選択された場合は、検索Provider内でもworkspaceごとの独立Taskへ
+fan-outする。同時実行数はCPUとストレージを枯渇させないよう上限を設ける。
+結果にはworkspace ID、名前、ルートパスを含め、同じ相対パスを区別する。
+
 ---
 
 # 49. Cancellation
@@ -1972,7 +2000,7 @@ semantic_search
 Shioriは単なる検索コマンドラッパーではない。
 
 ```text
-             AI Coding Agent
+                AI Agent
                     │
                     ▼
                  Shiori
@@ -1990,15 +2018,15 @@ Shioriは単なる検索コマンドラッパーではない。
 
 として、
 
-**AI Coding Agentと巨大なコードベースの間に存在する高速検索・ナビゲーションレイヤー**
+**AI Agentとローカルファイル群の間に存在する高速ファイル探索レイヤー**
 
-を目指す。
+を主機能とし、コードインデックスとSemantic Navigationを補助機能として提供する。
 
 ---
 
 # 61. 一文での定義
 
-> **Shiori is a fast, local-first code search and navigation MCP server that combines indexed file search, ripgrep, Tree-sitter, SQLite and LSP to help AI coding agents find the right code with fewer searches and fewer tokens.**
+> **Shiori is a fast, local-first file search MCP server that uses per-workspace SQLite indexes to help AI agents find the right files quickly, with ripgrep, Tree-sitter, FTS5 and LSP available as secondary code search and navigation capabilities.**
 
 ---
 

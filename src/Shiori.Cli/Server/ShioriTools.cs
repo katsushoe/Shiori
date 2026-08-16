@@ -44,7 +44,7 @@ internal sealed class ShioriTools
     }
 
     [McpServerTool(Name = "search", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-    [Description("Plans and runs a unified file, symbol, and text search for an allowed workspace.")]
+    [Description("Secondary code-search tool that plans file, symbol, and text providers for one workspace.")]
     public static Task<UnifiedSearchResponse> Search(
         [Description("Natural-language text, code identifier, filename, path, or quoted phrase.")] string query,
         [Description("Absolute path of the allowed workspace.")] string workspace,
@@ -86,6 +86,16 @@ internal sealed class ShioriTools
         return force ? engine.RebuildIndex() : engine.BuildIndex();
     }
 
+    [McpServerTool(Name = "update_indexes", ReadOnly = false, Idempotent = true, OpenWorld = false)]
+    [Description("Updates search databases when the user asks to update the search DB; waits for every selected workspace.")]
+    public static Task<UpdateIndexesResponse> UpdateIndexes(
+        WorkspaceCoordinator coordinator,
+        [Description("Optional absolute allowed workspace paths; omit to update all allowed workspaces.")]
+        string[]? workspaces = null,
+        [Description("Force full rebuilds instead of incremental updates.")] bool force = false,
+        CancellationToken cancellationToken = default) =>
+        coordinator.UpdateIndexesAsync(workspaces, force, cancellationToken);
+
     [McpServerTool(Name = "file_outline", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Returns the indexed symbol hierarchy of one source file before reading its full contents.")]
     public static FileOutline GetFileOutline(
@@ -99,17 +109,26 @@ internal sealed class ShioriTools
     }
 
     [McpServerTool(Name = "search_files", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-    [Description("Searches file names and paths in a local Shiori workspace.")]
-    public static SearchFilesResponse SearchFiles(
+    [Description("Primary Shiori tool for fast file-name and path discovery across one, several, or all allowed workspaces.")]
+    public static Task<WorkspaceSearchFilesResponse> SearchFiles(
         [Description("File name or relative path fragment to search for.")] string query,
-        [Description("Absolute path of the allowed workspace.")] string workspace,
-        NativeEngineRegistry registry,
+        WorkspaceCoordinator coordinator,
+        [Description("Optional absolute allowed workspace; retained for single-workspace compatibility.")]
+        string? workspace = null,
+        [Description("Optional absolute allowed workspace paths; omit both selectors to search all allowed workspaces.")]
+        string[]? workspaces = null,
         [Description("Maximum number of results from 1 to 100.")] int limit = 20,
         CancellationToken cancellationToken = default)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        var engine = registry.GetEngine(workspace);
-        return new SearchFilesResponse(engine.SearchFiles(query, limit));
+        var selected = MergeWorkspaceSelectors(workspace, workspaces);
+        return coordinator.SearchFilesAsync(query, selected, limit, cancellationToken);
+    }
+
+    private static IReadOnlyList<string>? MergeWorkspaceSelectors(string? workspace, string[]? workspaces)
+    {
+        if (string.IsNullOrWhiteSpace(workspace)) return workspaces;
+        if (workspaces is null || workspaces.Length == 0) return [workspace];
+        return workspaces.Append(workspace).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
     [McpServerTool(Name = "search_text", ReadOnly = true, Idempotent = true, OpenWorld = false)]

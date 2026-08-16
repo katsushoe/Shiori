@@ -41,6 +41,9 @@ internal static class ShioriHttpServer
                     "Incremental index watcher failed for {Workspace}",
                     workspace));
         });
+        builder.Services.AddSingleton<IWorkspaceEngineProvider>(serviceProvider =>
+            serviceProvider.GetRequiredService<NativeEngineRegistry>());
+        builder.Services.AddSingleton<WorkspaceCoordinator>();
         builder.Services.AddSingleton<ILspServerConnectionFactory, ProcessLspServerConnectionFactory>();
         builder.Services.AddSingleton<LspServerManager>();
         builder.Services.AddMcpServer()

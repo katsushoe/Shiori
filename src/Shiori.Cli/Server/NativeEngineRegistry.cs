@@ -5,7 +5,7 @@ using Shiori.Native;
 namespace Shiori.Cli.Server;
 
 /// <summary>Shares one native engine instance per canonical workspace.</summary>
-public sealed class NativeEngineRegistry : IDisposable
+public sealed class NativeEngineRegistry : IWorkspaceEngineProvider, IDisposable
 {
     private readonly HashSet<string> _allowedWorkspaces;
     private readonly ConcurrentDictionary<string, Lazy<IShioriEngine>> _engines =
@@ -55,6 +55,22 @@ public sealed class NativeEngineRegistry : IDisposable
                 () => NativeShioriEngine.Open(path),
                 LazyThreadSafetyMode.ExecutionAndPublication));
         return lazyEngine.Value;
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<string> ResolveWorkspacePaths(IReadOnlyList<string>? requested)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var candidates = requested is null || requested.Count == 0
+            ? _allowedWorkspaces
+            : requested.Select(Path.GetFullPath);
+        var paths = candidates.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (paths.Any(path => !_allowedWorkspaces.Contains(path)))
+        {
+            throw new UnauthorizedAccessException("One or more requested workspaces are not allowed.");
+        }
+
+        return paths.Order(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
     /// <summary>Lists all configured workspaces and opens their persistent databases.</summary>

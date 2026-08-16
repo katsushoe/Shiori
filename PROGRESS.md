@@ -6,8 +6,17 @@
 
 - v1全体: **100%**（仕様書のv1完成条件20項目中20項目完了）
 - 現在のフェーズ: **v1 Release Preparation — 100%**（8項目中8項目完了）
-- v1.1全体: **86%**（仕様書のv1.1候補7項目中6項目完了）
-- 現在のフェーズ: **v1.1 Cross-platform — 50%**（2項目中1項目完了）
+- 対象範囲内のv1.1全体: **100%**（macOS・Linux正式対応を除く5項目中5項目完了）
+- 現在のフェーズ: **Windows向けv1.1 — 100%**
+
+## Multi-workspace coordination（完了）
+
+- [x] Workspace別SQLite DBと遅延常駐Engineを維持
+- [x] MCPサーバでWorkspace別Taskへbounded fan-out
+- [x] `search_files`の複数・全Workspace検索と結果統合
+- [x] 同期完了型`update_indexes`とWorkspace別更新直列化
+- [x] 部分失敗をWorkspace別エラーとして分離
+- [x] ADR・仕様書・README・単体テスト・実MCP検証
 
 ## Phase 2（完了）
 

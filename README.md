@@ -1,6 +1,7 @@
 # Shiori
 
-Shiori is a local-first code search and navigation server for AI coding agents.
+Shiori is a fast, local-first file search server for AI agents, with indexed
+code search and navigation capabilities.
 
 The C# host owns MCP, CLI, configuration, and query planning. A Rust Native DLL
 owns performance-sensitive search, indexing, SQLite, and Tree-sitter operations
@@ -48,8 +49,19 @@ The MCP server watches allowed workspaces recursively and debounces bursts of
 create, modify, rename, and delete events into incremental index builds.
 
 The MCP server exposes `search`, `search_ast`, `navigate`, `workspace_list`, `index_status`, `reindex`,
-`search_files`, `search_text`, `search_symbols`, and `file_outline`. `reindex` builds a missing
-index by default; set `force` to `true` to run a full rescan.
+`update_indexes`, `search_files`, `search_text`, `search_symbols`, and `file_outline`. `reindex`
+builds one missing index by default; set `force` to `true` to run a full rescan.
+
+`search_files` accepts one workspace, several workspace paths, or neither selector to search every
+allowed workspace. The MCP host fans work out as bounded ThreadPool tasks to the persistent Engine
+and SQLite database for each workspace, then merges globally limited results with workspace IDs,
+names, and roots. `update_indexes` incrementally updates selected or all allowed workspace databases
+in parallel, serializes competing updates for the same workspace, and responds after every update
+has finished. See [`ADR 0002`](docs/adr/0002-multi-workspace-coordination.md).
+
+File-name and path discovery through `search_files` is Shiori's primary capability. Indexed symbol,
+AST, text, and semantic navigation tools are secondary capabilities used when an agent needs to
+inspect or navigate code after locating the relevant files.
 
 The managed query planner classifies file paths, code identifiers, quoted text,
 and reference or implementation intent into deterministic file, symbol, and
