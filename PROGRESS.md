@@ -26,6 +26,9 @@
 - [ ] Claude Code integration
 - [ ] Codex integration
 
+Claude Code向け `.mcp.json` 生成とJSON検証は完了。Claude Code CLIが現在の
+検証環境に未導入のため、実クライアント接続確認後に完了へ変更する。
+
 ## v1完了済み
 
 MCP Streamable HTTP server、Workspace isolation、SQLite database、File index、

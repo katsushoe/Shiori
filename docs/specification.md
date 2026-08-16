@@ -1262,6 +1262,9 @@ Claude Code向け設定を生成可能にする。
 shiori config claude
 ```
 
+標準出力はClaude Codeのproject scope `.mcp.json`形式とし、Bearer tokenは
+`${SHIORI_MCP_TOKEN}` の環境変数参照として出力する。秘密値は設定へ埋め込まない。
+
 Codex：
 
 ```bash

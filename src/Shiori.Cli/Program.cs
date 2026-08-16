@@ -2,6 +2,7 @@ using System.Text.Json;
 using Shiori.Cli;
 using Shiori.Cli.Server;
 using Shiori.Core.Engine;
+using Shiori.Core.Integration;
 using Shiori.Core.Search;
 using Shiori.Native;
 
@@ -25,6 +26,7 @@ static int Run(string[] arguments)
             "outline" => RunOutline(arguments[1..]),
             "search" => RunSearch(arguments[1..]),
             "symbol" => RunSymbol(arguments[1..]),
+            "config" => RunConfig(arguments[1..]),
             "workspace" => RunWorkspace(arguments[1..]),
             "doctor" => DoctorRunner.Run(),
             "serve" => RunServer(arguments[1..]),
@@ -35,6 +37,21 @@ static int Run(string[] arguments)
     {
         return Fail(exception.Message);
     }
+}
+
+static int RunConfig(string[] arguments)
+{
+    if (arguments.Length == 0) return Fail("config requires claude or codex.");
+    var port = int.TryParse(GetOption(arguments, "--port"), out var parsed) ? parsed : 39473;
+    var name = GetOption(arguments, "--name") ?? "shiori";
+    var configuration = arguments[0] switch
+    {
+        "claude" => ClaudeCodeConfigGenerator.Generate(port, name),
+        "codex" => throw new ArgumentException("Codex configuration is not implemented yet."),
+        _ => throw new ArgumentException($"Unknown config target: {arguments[0]}")
+    };
+    Console.WriteLine(configuration);
+    return 0;
 }
 
 static int RunSearch(string[] arguments)
@@ -213,5 +230,6 @@ static string Usage() => """
       shiori workspace list
       shiori workspace remove <name-or-id-or-absolute-directory>
       shiori doctor
+      shiori config claude [--port <1-65535>] [--name <server-name>]
       shiori serve [--port <1-65535>]
     """;

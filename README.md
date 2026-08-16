@@ -23,6 +23,7 @@ dotnet run --project src/Shiori.Cli -- workspace add <absolute-directory>
 dotnet run --project src/Shiori.Cli -- workspace list
 dotnet run --project src/Shiori.Cli -- workspace remove <name-or-id-or-absolute-directory>
 dotnet run --project src/Shiori.Cli -- doctor
+dotnet run --project src/Shiori.Cli -- config claude > .mcp.json
 dotnet run --project src/Shiori.Cli -- serve --port 39473
 ```
 
@@ -69,6 +70,14 @@ Rust, Go, Java, C, and C++ in the v1 parser set.
 Full index builds extract namespaces/modules, types, functions, methods,
 constructors, properties, fields, and constants into SQLite `symbols` while
 maintaining parent and qualified-name relationships.
+
+## Claude Code
+
+Run `shiori config claude > .mcp.json` in the Claude Code project, set
+`SHIORI_MCP_TOKEN` to the same bearer token used by the running Shiori server,
+then restart Claude Code and inspect `/mcp`. The generated project-scoped config
+uses Streamable HTTP at `http://127.0.0.1:39473/mcp` and references the token by
+environment variable instead of writing its value to disk.
 
 Set `SHIORI_EXCLUDE_PATTERNS` to semicolon-separated gitignore-style glob
 patterns (for example, `generated/**;*.min.js`) to add workspace exclusions.
