@@ -101,8 +101,9 @@ environment-variable name and never embed its value.
 
 - [CLI command reference](COMMANDS.md)
 - [Configuration reference](CONFIG.md)
+- [MCP setup guide](MCP_SETUP.md)
 - [Architecture](docs/architecture.md)
-- [Specification](docs/specification.md)
+- [Specification (Japanese)](docs/specification.ja.md)
 - [Multi-workspace coordination ADR](docs/adr/0002-multi-workspace-coordination.md)
 
 ## Security
