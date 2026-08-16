@@ -5,7 +5,7 @@
 ## 完成度
 
 - v1全体: **100%**（仕様書のv1完成条件20項目中20項目完了）
-- 現在のフェーズ: **v1 Client Integration — 100%**（2項目中2項目完了）
+- 現在のフェーズ: **v1 Release Preparation — 71%**（7項目中5項目完了）
 
 ## Phase 2（完了）
 
@@ -38,6 +38,10 @@ Text search、Symbol search、File outline、Index status、CLI、Windows suppor
 ## v1残作業（優先順）
 
 なし。
+
+## v1リリース準備
+
+進捗と残作業は [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) を参照。
 
 ## 算定基準
 

@@ -6,7 +6,7 @@ The C# host owns MCP, CLI, configuration, and query planning. A Rust Native DLL
 owns performance-sensitive search, indexing, SQLite, and Tree-sitter operations
 behind a versioned C ABI.
 
-Product version: `0.0.0.0`.
+Product version: `1.0.0`.
 
 ## Commands
 
@@ -94,3 +94,9 @@ patterns (for example, `generated/**;*.min.js`) to add workspace exclusions.
 Build `native/shiori-engine` as a `cdylib` and place the resulting
 `shiori_engine` native library beside the managed executable. Search operations
 never read outside the canonical `--allow` workspace.
+
+## Release package
+
+On Windows x64, run `scripts/Publish-Windows.ps1` to build the Rust engine and
+the framework-dependent .NET host. The generated ZIP is written under
+`artifacts/` and requires the .NET 10 runtime.
