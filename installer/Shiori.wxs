@@ -61,6 +61,17 @@
       <Environment Id="AddBinToPath" Name="PATH" Action="set" Part="last" Value="[BINFOLDER]" System="no" Permanent="no" />
     </Component>
 
+    <!--
+      Windows Installer expects every component installed under the user
+      profile to key off an HKCU registry value rather than a file (ICE38).
+      This marker component gives the product a compliant keypath so
+      per-user product registration, including the Add/Remove Programs
+      entry, is created reliably.
+    -->
+    <Component Id="RegistryKeyPath" Directory="INSTALLFOLDER" Guid="0868405c-f23f-4119-9a52-5ee366b988da">
+      <RegistryValue Root="HKCU" Key="Software\Shiori contributors\Shiori" Name="InstallPath" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+    </Component>
+
     <Feature Id="MainFeature" Title="Shiori" Level="1">
       <ComponentGroupRef Id="BinFiles" />
       <ComponentGroupRef Id="DocFiles" />
@@ -68,6 +79,7 @@
       <ComponentRef Id="PreserveLogsDirectory" />
       <ComponentRef Id="PreserveDataDirectory" />
       <ComponentRef Id="PathEnvironment" />
+      <ComponentRef Id="RegistryKeyPath" />
     </Feature>
   </Package>
 </Wix>
