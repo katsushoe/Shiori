@@ -30,6 +30,7 @@ public static class LspNavigationService
             "definition" => "textDocument/definition",
             "references" => "textDocument/references",
             "implementations" => "textDocument/implementation",
+            "callers" or "callees" => null,
             _ => throw new ArgumentException($"Unsupported navigation action: {action}", nameof(action)),
         };
 
@@ -48,6 +49,21 @@ public static class LspNavigationService
 
         try
         {
+            if (method is null)
+            {
+                var callLocations = await NavigateCallHierarchyAsync(
+                    router,
+                    descriptor,
+                    canonicalWorkspace,
+                    sourcePath,
+                    line,
+                    column,
+                    action,
+                    limit,
+                    cancellationToken).ConfigureAwait(false);
+                return new NavigationResponse(true, null, null, false, callLocations);
+            }
+
             var result = await router.SendRequestAsync(
                 descriptor,
                 canonicalWorkspace,
@@ -66,6 +82,49 @@ public static class LspNavigationService
         {
             return Unavailable(exception.Message);
         }
+    }
+
+    private static async Task<IReadOnlyList<NavigationLocation>> NavigateCallHierarchyAsync(
+        ILspRequestRouter router,
+        LanguageServerDescriptor descriptor,
+        string workspace,
+        string sourcePath,
+        int line,
+        int column,
+        string action,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var prepared = await router.SendRequestAsync(
+            descriptor,
+            workspace,
+            "textDocument/prepareCallHierarchy",
+            CreateParameters(action, sourcePath, line, column),
+            cancellationToken).ConfigureAwait(false);
+        var items = EnumerateElements(prepared);
+        var method = action == "callers"
+            ? "callHierarchy/incomingCalls"
+            : "callHierarchy/outgoingCalls";
+        var itemProperty = action == "callers" ? "from" : "to";
+        var locations = new List<NavigationLocation>();
+        foreach (var item in items)
+        {
+            var calls = await router.SendRequestAsync(
+                descriptor,
+                workspace,
+                method,
+                new { item },
+                cancellationToken).ConfigureAwait(false);
+            foreach (var call in EnumerateElements(calls))
+            {
+                if (!call.TryGetProperty(itemProperty, out var target)) continue;
+                var location = ParseLocation(target, workspace);
+                if (location is not null && !locations.Contains(location)) locations.Add(location);
+                if (locations.Count >= limit) return locations;
+            }
+        }
+
+        return locations;
     }
 
     private static object CreateParameters(string action, string sourcePath, int line, int column)
@@ -95,6 +154,14 @@ public static class LspNavigationService
             .ToArray();
     }
 
+    private static IReadOnlyList<JsonElement> EnumerateElements(JsonElement result)
+    {
+        if (result.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined) return [];
+        return result.ValueKind == JsonValueKind.Array
+            ? result.EnumerateArray().Select(item => item.Clone()).ToArray()
+            : [result.Clone()];
+    }
+
     private static NavigationLocation? ParseLocation(JsonElement location, string workspace)
     {
         var uriName = location.TryGetProperty("targetUri", out var targetUri) ? targetUri :
@@ -110,6 +177,8 @@ public static class LspNavigationService
         if (!IsInsideWorkspace(workspace, path)) return null;
         var range = location.TryGetProperty("targetSelectionRange", out var selectionRange)
             ? selectionRange
+            : location.TryGetProperty("selectionRange", out var itemSelectionRange)
+                ? itemSelectionRange
             : location.TryGetProperty("range", out var normalRange) ? normalRange : default;
         if (range.ValueKind != JsonValueKind.Object
             || !range.TryGetProperty("start", out var start)

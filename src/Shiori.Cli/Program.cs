@@ -43,8 +43,9 @@ static int Run(string[] arguments)
 
 static int RunNavigate(string[] arguments)
 {
-    if (arguments.Length < 2 || arguments[0] is not ("definition" or "references" or "implementations"))
-        return Fail("navigate requires definition, references, or implementations and a source-file path.");
+    if (arguments.Length < 2
+        || arguments[0] is not ("definition" or "references" or "implementations" or "callers" or "callees"))
+        return Fail("navigate requires definition, references, implementations, callers, or callees and a source-file path.");
     var workspace = GetOption(arguments, "--allow")
         ?? throw new ArgumentException("--allow is required.");
     var line = int.TryParse(GetOption(arguments, "--line"), out var parsedLine) ? parsedLine : 0;
@@ -254,7 +255,7 @@ static string Usage() => """
       shiori index build --allow <directory>
       shiori index status --allow <directory>
       shiori index rebuild --allow <directory>
-      shiori navigate <definition|references|implementations> <file>
+      shiori navigate <definition|references|implementations|callers|callees> <file>
         --line <one-based> --column <one-based>
         --allow <directory> [--limit <1-100>]
       shiori outline <source-file> --allow <directory>

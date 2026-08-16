@@ -133,6 +133,52 @@ public sealed class LspDefinitionServiceTests : IDisposable
         Assert.Equal(4, location.Column);
     }
 
+    [Theory]
+    [InlineData("callers", "callHierarchy/incomingCalls", "from")]
+    [InlineData("callees", "callHierarchy/outgoingCalls", "to")]
+    public async Task NavigateAsync_prepares_and_resolves_call_hierarchy(
+        string action,
+        string callMethod,
+        string itemProperty)
+    {
+        var source = CreateFile("Source.cs");
+        var target = CreateFile("Target.cs");
+        var preparedItem = new
+        {
+            name = "Source",
+            kind = 12,
+            uri = new Uri(source).AbsoluteUri,
+            range = new { start = new { line = 0, character = 0 }, end = new { line = 0, character = 6 } },
+            selectionRange = new { start = new { line = 0, character = 0 }, end = new { line = 0, character = 6 } },
+        };
+        var targetItem = new
+        {
+            name = "Target",
+            kind = 12,
+            uri = new Uri(target).AbsoluteUri,
+            range = new { start = new { line = 4, character = 2 }, end = new { line = 4, character = 8 } },
+            selectionRange = new { start = new { line = 4, character = 2 }, end = new { line = 4, character = 8 } },
+        };
+        var call = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            [itemProperty] = targetItem,
+            ["fromRanges"] = Array.Empty<object>(),
+        };
+        var router = new SequenceRouter(
+            JsonSerializer.SerializeToElement(new[] { preparedItem }),
+            JsonSerializer.SerializeToElement(new[] { call }));
+
+        var response = await LspNavigationService.NavigateAsync(
+            router, _workspace, source, 1, 1, action, 20, _descriptor);
+
+        Assert.True(response.Success);
+        Assert.Equal(new[] { "textDocument/prepareCallHierarchy", callMethod }, router.Methods);
+        var location = Assert.Single(response.Locations);
+        Assert.Equal("Target.cs", location.Path);
+        Assert.Equal(5, location.Line);
+        Assert.Equal(3, location.Column);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_workspace))
@@ -180,6 +226,24 @@ public sealed class LspDefinitionServiceTests : IDisposable
             return _exception is null
                 ? Task.FromResult(_result)
                 : Task.FromException<JsonElement>(_exception);
+        }
+    }
+
+    private sealed class SequenceRouter(params JsonElement[] results) : ILspRequestRouter
+    {
+        private readonly Queue<JsonElement> _results = new(results);
+
+        internal List<string> Methods { get; } = [];
+
+        public Task<JsonElement> SendRequestAsync(
+            LanguageServerDescriptor descriptor,
+            string workspace,
+            string method,
+            object? parameters,
+            CancellationToken cancellationToken = default)
+        {
+            Methods.Add(method);
+            return Task.FromResult(_results.Dequeue());
         }
     }
 }

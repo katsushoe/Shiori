@@ -12,7 +12,7 @@ internal sealed class ShioriTools
     [McpServerTool(Name = "navigate", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Navigates from a source position using a lazily started language server.")]
     public static Task<NavigationResponse> Navigate(
-        [Description("Navigation action: definition, references, or implementations.")] string action,
+        [Description("Navigation action: definition, references, implementations, callers, or callees.")] string action,
         [Description("Absolute path of the allowed workspace.")] string workspace,
         [Description("Relative or absolute source-file path inside the workspace.")] string file,
         [Description("One-based source line.")] int line,
