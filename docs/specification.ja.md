@@ -1,10 +1,18 @@
+# SPEC.md Version
+2026.08.17
+
+# 変更履歴
+
+- 2026.08.16
+- 2026.08.17
+
 # Shiori 仕様書
 
 **開発コード名:** Shiori
 **種別:** File Search MCP Server（Code Search / Code Navigation対応）
 **対象:** Claude Code / OpenAI Codex / その他MCP対応AI Coding Agent
-**想定ライセンス:** 未定
-**推奨実装言語:** Rust
+**ライセンス:** MIT
+**実装言語:** C#（Managed Host）およびRust（Native Engine）
 **永続ストレージ:** SQLite
 **基本方針:** ローカル完結・高速・読み取り専用
 
@@ -49,9 +57,9 @@ Claude Code / Codex
 
 ---
 
-# 2. 名前
+$2## 2. 名前
 
-## 2.1 開発コード名
+$2### 2.1 開発コード名
 
 **Shiori**
 
@@ -69,7 +77,7 @@ GitHub Description案：
 
 ---
 
-# 3. 設計目標
+$2## 3. 設計目標
 
 Shioriは以下を最優先する。
 
@@ -130,7 +138,7 @@ Shioriは読み取り専用のFile Searchを主機能とし、Code Search / Code
 
 ---
 
-# 4. 非目標
+$2## 4. 非目標
 
 v1では以下を対象外とする。
 
@@ -156,7 +164,7 @@ Shioriはあくまで
 
 ---
 
-# 5. 全体アーキテクチャ
+$2## 5. 全体アーキテクチャ
 
 ```text
 ┌────────────────────────────────────────┐
@@ -193,9 +201,9 @@ Shioriはあくまで
 
 ---
 
-# 6. 主要コンポーネント
+$2## 6. 主要コンポーネント
 
-## 6.1 MCP Server
+$2### 6.1 MCP Server
 
 Claude Code / Codexとの通信を担当する。
 
@@ -212,7 +220,7 @@ stdioはクライアント互換性が必要な場合の将来Adapter候補と�
 
 ---
 
-# 7. Query Planner
+$2## 7. Query Planner
 
 Shioriの中核コンポーネント。
 
@@ -256,7 +264,7 @@ Query Plannerは必要に応じて複数エンジンを並列実行する。
 
 ---
 
-# 8. File Search Engine
+$2## 8. File Search Engine
 
 ファイル名・パス検索を担当する。
 
@@ -274,7 +282,7 @@ SQLite File Indexを標準とする。
 
 ---
 
-# 9. Text Search Engine
+$2## 9. Text Search Engine
 
 全文検索には原則として
 
@@ -305,7 +313,7 @@ Shiori内部でripgrepを起動し、出力をMCP向け構造に変換する。
 
 ---
 
-# 10. Symbol Index Engine
+$2## 10. Symbol Index Engine
 
 クラス、メソッド、関数、フィールド、interfaceなどを検索する。
 
@@ -338,7 +346,7 @@ constructor
 
 ---
 
-# 11. Symbol Search
+$2## 11. Symbol Search
 
 Tree-sitterで取得したシンボルはSQLiteに保存する。
 
@@ -372,7 +380,7 @@ symbols
 
 ---
 
-# 12. LSP Engine
+$2## 12. LSP Engine
 
 意味的なコードナビゲーションにはLanguage Server Protocolを利用する。
 
@@ -402,7 +410,7 @@ workspaceSymbol
 
 ---
 
-# 13. LSPはLazy Startとする
+$2## 13. LSPはLazy Startとする
 
 すべてのworkspaceで常時Language Serverを立ち上げない。
 
@@ -428,7 +436,7 @@ find_implementations
 
 ---
 
-# 14. AST Search
+$2## 14. AST Search
 
 Tree-sitterを利用してコード構造検索を行う。
 
@@ -447,7 +455,7 @@ Tree-sitterを利用してコード構造検索を行う。
 
 ---
 
-# 15. SQLite
+$2## 15. SQLite
 
 SQLiteをShioriの唯一の永続インデックスストレージとする。
 
@@ -476,7 +484,7 @@ macOS：
 
 ---
 
-# 16. SQLite設定
+$2## 16. SQLite設定
 
 基本設定：
 
@@ -491,7 +499,7 @@ PRAGMA temp_store=MEMORY;
 
 ---
 
-# 17. データベース構造
+$2## 17. データベース構造
 
 主要テーブル：
 
@@ -621,7 +629,7 @@ status
 
 ---
 
-# 18. ソースコード本文
+$2## 18. ソースコード本文
 
 v1ではソースコード全文をSQLiteへ保存しない。
 
@@ -649,7 +657,7 @@ dependencies
 
 ---
 
-# 19. Incremental Index
+$2## 19. Incremental Index
 
 毎回フルインデックスを作成しない。
 
@@ -685,7 +693,7 @@ SQLite Transaction
 
 ---
 
-# 20. File Watcher
+$2## 20. File Watcher
 
 workspaceを監視する。
 
@@ -713,7 +721,7 @@ dotnet restore
 
 ---
 
-# 21. 除外ルール
+$2## 21. 除外ルール
 
 デフォルト除外：
 
@@ -739,7 +747,7 @@ packages
 
 ---
 
-# 22. MCP Tools
+$2## 22. MCP Tools
 
 v1ではTool数を過剰に増やさない。
 
@@ -922,7 +930,7 @@ force（trueの場合は全再構築）
 
 ---
 
-# 23. 検索結果フォーマット
+$2## 23. 検索結果フォーマット
 
 結果は原則として構造化する。
 
@@ -947,7 +955,7 @@ force（trueの場合は全再構築）
 
 ---
 
-# 24. 検索結果サイズ
+$2## 24. 検索結果サイズ
 
 AIのコンテキストを浪費しないことを重要要件とする。
 
@@ -969,7 +977,7 @@ snippetは前後数行に限定する。
 
 ---
 
-# 25. Ranking
+$2## 25. Ranking
 
 複数検索エンジンから結果を取得した場合は統合ランキングする。
 
@@ -989,7 +997,7 @@ Fuzzy symbol match
 
 ---
 
-# 26. Search Planner例
+$2## 26. Search Planner例
 
 Agent：
 
@@ -1046,7 +1054,7 @@ ripgrep
 
 ---
 
-# 27. Fallback設計
+$2## 27. Fallback設計
 
 Shioriは一部外部ツールがなくても動作する。
 
@@ -1065,7 +1073,7 @@ Tree-sitter language unsupported
 
 ---
 
-# 28. Workspace
+$2## 28. Workspace
 
 複数workspaceを登録可能とする。
 
@@ -1093,7 +1101,7 @@ Taskとして各Engineを並列実行し、結果をfan-inする。専用AI Agen
 
 ---
 
-# 29. Workspace ID
+$2## 29. Workspace ID
 
 絶対パスを正規化した値からstable IDを生成する。
 
@@ -1107,7 +1115,7 @@ workspace移動時は別workspaceとして扱う。
 
 ---
 
-# 30. セキュリティ
+$2## 30. セキュリティ
 
 Shioriは明示されたworkspace外を検索しない。
 
@@ -1138,7 +1146,7 @@ junction
 
 ---
 
-# 31. ネットワーク
+$2## 31. ネットワーク
 
 Shiori Coreは外部ネットワーク通信を行わない。
 
@@ -1148,7 +1156,7 @@ v1ではTelemetryもデフォルトOFFとする。
 
 ---
 
-# 32. CLI
+$2## 32. CLI
 
 実行ファイル：
 
@@ -1278,7 +1286,7 @@ index DB
 
 ---
 
-# 33. MCP設定生成
+$2## 33. MCP設定生成
 
 Claude Code向け設定を生成可能にする。
 
@@ -1306,7 +1314,7 @@ shiori install codex
 
 ---
 
-# 34. 設定ファイル
+$2## 34. 設定ファイル
 
 任意で、
 
@@ -1349,7 +1357,7 @@ path = "F:\\Projects"
 
 ---
 
-# 35. File Search Provider
+$2## 35. File Search Provider
 
 Provider interface：
 
@@ -1368,7 +1376,7 @@ SQLiteを標準providerとし、利用不能時はFilesystemProviderへフォー
 
 ---
 
-# 36. Language Adapter
+$2## 36. Language Adapter
 
 プログラミング言語ごとの差異をAdapterとして分離する。
 
@@ -1397,7 +1405,7 @@ LSP configuration
 
 ---
 
-# 37. 初期対応言語
+$2## 37. 初期対応言語
 
 v1で優先する言語：
 
@@ -1417,7 +1425,7 @@ C++
 
 ---
 
-# 38. C#対応
+$2## 38. C#対応
 
 C#では、
 
@@ -1440,7 +1448,7 @@ LSPについては利用可能なC# Language Serverを自動検出可能な設�
 
 ---
 
-# 39. インデックス作成フロー
+$2## 39. インデックス作成フロー
 
 ```text
 Workspace Registration
@@ -1472,7 +1480,7 @@ FTS5 index
 
 ---
 
-# 40. Startup
+$2## 40. Startup
 
 Shiori起動時にフルスキャンを必須にしない。
 
@@ -1494,7 +1502,7 @@ Agentからの検索受付を最優先する。
 
 ---
 
-# 41. Git操作への対応
+$2## 41. Git操作への対応
 
 以下の場合、大量ファイル変更が発生する。
 
@@ -1511,7 +1519,7 @@ File Watcherイベントをdebounceし、
 
 ---
 
-# 42. Performance目標
+$2## 42. Performance目標
 
 性能は環境依存だが、v1の目標値を設定する。
 
@@ -1553,7 +1561,7 @@ Language Server依存のため明確な保証対象外とする。
 
 ---
 
-# 43. Benchmark
+$2## 43. Benchmark
 
 以下を自動測定する。
 
@@ -1583,7 +1591,7 @@ DB size
 
 ---
 
-# 44. Observability
+$2## 44. Observability
 
 標準ログレベル：
 
@@ -1600,7 +1608,7 @@ Streamable HTTP MCPでは構造化ログを標準ログ出力へ出力する。
 
 ---
 
-# 45. Search Metrics
+$2## 45. Search Metrics
 
 debug時には、
 
@@ -1619,7 +1627,7 @@ files_scanned
 
 ---
 
-# 46. エラー設計
+$2## 46. エラー設計
 
 例えばLSPが起動できない場合：
 
@@ -1636,7 +1644,7 @@ Agentが次の行動を判断できる構造化エラーとする。
 
 ---
 
-# 47. キャッシュ
+$2## 47. キャッシュ
 
 キャッシュ対象：
 
@@ -1662,7 +1670,7 @@ Parser versionが変わった場合は対象インデックスのみ無効化す
 
 ---
 
-# 48. Concurrent Search
+$2## 48. Concurrent Search
 
 独立した検索は並列実行する。
 
@@ -1688,7 +1696,7 @@ fan-outする。同時実行数はCPUとストレージを枯渇させないよ�
 
 ---
 
-# 49. Cancellation
+$2## 49. Cancellation
 
 MCP Clientが検索をキャンセルした場合、可能な限り検索処理を中断する。
 
@@ -1698,7 +1706,7 @@ ripgrep child processもterminateする。
 
 ---
 
-# 50. Repository構成案
+$2## 50. Repository構成案
 
 ```text
 shiori/
@@ -1734,7 +1742,7 @@ shiori/
 
 ---
 
-# 51. 推奨技術スタック
+$2## 51. 推奨技術スタック
 
 Core：
 
@@ -1788,7 +1796,7 @@ OS native watcher abstraction
 
 ---
 
-# 52. Rustを推奨する理由
+$2## 52. Rustを推奨する理由
 
 ShioriはAIアプリではなく、
 
@@ -1814,7 +1822,7 @@ SQLite連携
 
 ---
 
-# 53. Claude Code / Codexから見たShiori
+$2## 53. Claude Code / Codexから見たShiori
 
 Agentは最初から大量ファイルを探索する必要がなくなる。
 
@@ -1850,7 +1858,7 @@ navigate references
 
 ---
 
-# 54. Agent向け最適化
+$2## 54. Agent向け最適化
 
 MCP Tool descriptionには、
 
@@ -1866,7 +1874,7 @@ MCP Tool descriptionには、
 
 ---
 
-# 55. Tool重複の抑制
+$2## 55. Tool重複の抑制
 
 Claude Code / Codexは既に、
 
@@ -1894,7 +1902,7 @@ Ranking
 
 ---
 
-# 56. v1必須機能
+$2## 56. v1必須機能
 
 Shiori v1完成条件：
 
@@ -1923,7 +1931,7 @@ Codex integration
 
 ---
 
-# 57. v1.1候補
+$2## 57. v1.1候補
 
 ```text
 LSP Definition
@@ -1939,7 +1947,7 @@ LSPについて実装が安定する場合はv1へ前倒し可能。
 
 ---
 
-# 58. v2候補
+$2## 58. v2候補
 
 ```text
 Cross-repository symbol graph
@@ -1956,7 +1964,7 @@ Repository relationship graph
 
 ---
 
-# 59. Embeddingについて
+$2## 59. Embeddingについて
 
 v1ではEmbeddingを導入しない。
 
@@ -1995,7 +2003,7 @@ semantic_search
 
 ---
 
-# 60. Shioriの最終的な位置付け
+$2## 60. Shioriの最終的な位置付け
 
 Shioriは単なる検索コマンドラッパーではない。
 
@@ -2024,13 +2032,13 @@ Shioriは単なる検索コマンドラッパーではない。
 
 ---
 
-# 61. 一文での定義
+$2## 61. 一文での定義
 
 > **Shiori is a fast, local-first file search MCP server that uses per-workspace SQLite indexes to help AI agents find the right files quickly, with ripgrep, Tree-sitter, FTS5 and LSP available as secondary code search and navigation capabilities.**
 
 ---
 
-# 62. 開発優先順位
+$2## 62. 開発優先順位
 
 実装は以下の順序を推奨する。
 

@@ -2,6 +2,14 @@
 
 All notable changes to Shiori are documented in this file.
 
+## [Unreleased]
+
+### Documentation
+
+- Added package and security references required by the shared documentation standard.
+- Reworked MCP client setup around explicit values, scope, alternatives, and staged verification.
+- Standardized README sections, command labels, and specification heading hierarchy.
+
 ## [1.1.2] - 2026-08-17
 
 ### Changed

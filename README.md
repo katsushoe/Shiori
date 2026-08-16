@@ -57,14 +57,14 @@ Set-Location Shiori
 cargo build --release --manifest-path .\native\shiori-engine\Cargo.toml
 dotnet restore .\Shiori.slnx
 dotnet build .\Shiori.slnx --configuration Release --no-restore
-dotnet test .\Shiori.slnx --configuration Release --no-build
+dotnet test .\tests\Shiori.Core.Tests\Shiori.Core.Tests.csproj --configuration Release --no-build
 .\scripts\Publish-Windows.ps1 -Version 1.1.2
 ```
 
 The publish script writes the installer, ZIP, and checksum files to
 `artifacts/`. Use `-SkipInstaller` when Inno Setup is not installed.
 
-## Initial Configuration
+## Configuration
 
 Create a random token of at least 32 characters and list every directory that
 the MCP server may access. Windows separates workspace paths with `;`.
@@ -79,7 +79,9 @@ Persist these values using a secure user-level environment configuration if
 the server must survive terminal restarts. Registrations made by `workspace add`
 do not grant MCP access. See [CONFIG.md](CONFIG.md) for every setting.
 
-## Build the Initial Index
+## Usage
+
+### Build the Initial Index
 
 Build one independent index for each workspace before the first search:
 
@@ -92,7 +94,7 @@ shiori index status --allow F:\Projects\ProjectA
 Later `index build` calls are incremental. For MCP clients, `update_indexes`
 updates selected or all allowed workspaces and returns after completion.
 
-## Start and Connect
+### Start and Connect
 
 ```powershell
 shiori serve --port 39473
@@ -106,7 +108,9 @@ environment-variable name and never embed its value.
 
 - [CLI command reference](COMMANDS.md)
 - [Configuration reference](CONFIG.md)
+- [Package inventory](PACKAGES.md)
 - [MCP setup guide](MCP_SETUP.md)
+- [Security policy](SECURITY.md)
 - [Architecture](docs/architecture.md)
 - [Specification (Japanese)](docs/specification.ja.md)
 - [Multi-workspace coordination ADR](docs/adr/0002-multi-workspace-coordination.md)

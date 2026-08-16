@@ -60,14 +60,14 @@ Set-Location Shiori
 cargo build --release --manifest-path .\native\shiori-engine\Cargo.toml
 dotnet restore .\Shiori.slnx
 dotnet build .\Shiori.slnx --configuration Release --no-restore
-dotnet test .\Shiori.slnx --configuration Release --no-build
+dotnet test .\tests\Shiori.Core.Tests\Shiori.Core.Tests.csproj --configuration Release --no-build
 .\scripts\Publish-Windows.ps1 -Version 1.1.2
 ```
 
 配布スクリプトはインストーラ、ZIP、チェックサムを`artifacts/`へ出力します。
 Inno Setupを導入していない場合は`-SkipInstaller`を指定してください。
 
-## 初期設定
+## 設定
 
 32文字以上のランダムなトークンを作成し、MCPサーバーからのアクセスを許可する
 全ディレクトリを設定します。Windowsでは複数のパスを`;`で区切ります。
@@ -82,7 +82,9 @@ shiori doctor
 値を永続化してください。`workspace add`による登録はMCPアクセスを許可しません。
 全設定は[CONFIG.md（英語）](CONFIG.md)を参照してください。
 
-## 初期インデックスの作成
+## 使用方法
+
+### 初期インデックスの作成
 
 最初の検索前に、ワークスペースごとに独立したインデックスを作成します。
 
@@ -96,7 +98,7 @@ shiori index status --allow F:\Projects\ProjectA
 `update_indexes`を使って選択したワークスペース、または許可された全
 ワークスペースを更新できます。応答は全更新の完了後に返ります。
 
-## 起動と接続
+### 起動と接続
 
 ```powershell
 shiori serve --port 39473
@@ -110,7 +112,9 @@ MCPエンドポイントは`http://127.0.0.1:39473/mcp`です。
 
 - [CLIコマンドリファレンス](COMMANDS.ja.md)
 - [設定リファレンス](CONFIG.ja.md)
+- [パッケージ一覧（英語）](PACKAGES.md)
 - [MCP設定ガイド](MCP_SETUP.ja.md)
+- [セキュリティポリシー（英語）](SECURITY.md)
 - [アーキテクチャ（英語）](docs/architecture.md)
 - [仕様書（日本語）](docs/specification.ja.md)
 - [マルチワークスペース連携ADR（英語）](docs/adr/0002-multi-workspace-coordination.md)

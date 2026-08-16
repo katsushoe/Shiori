@@ -6,6 +6,18 @@ This guide connects a locally running Shiori server to an AI coding agent. For
 all environment variables, see [CONFIG.md](CONFIG.md); for CLI details, see
 [COMMANDS.md](COMMANDS.md).
 
+## Values and Placeholders
+
+| Value | How to obtain it | Example | Change when |
+| :--- | :--- | :--- | :--- |
+| MCP token | Generate a random value of at least 32 characters | Generated GUID | Creating or rotating credentials |
+| Workspace path | Copy an existing absolute directory path | `F:\Projects\One` | Authorizing a different workspace |
+| Port | Choose an unused loopback TCP port | `39473` | The default port is unavailable |
+| Server name | Choose a client-visible identifier | `shiori` | Registering multiple Shiori servers |
+
+Values shown in angle brackets, such as `<workspace>`, are placeholders. Replace
+them with real values; do not enter the angle brackets.
+
 ## Prerequisites
 
 - Install Shiori using the installer, ZIP, or source instructions in
@@ -13,7 +25,7 @@ all environment variables, see [CONFIG.md](CONFIG.md); for CLI details, see
 - Choose one or more existing absolute workspace directories.
 - Open a new terminal if the installer added Shiori to `PATH`.
 
-## Configure the Server
+## Authentication and Environment
 
 Create a bearer token of at least 32 characters and authorize the workspace
 roots. Windows uses `;` between paths.
@@ -28,18 +40,6 @@ The client and server processes must receive the same token. Do not write the
 token into a committed configuration file. `workspace add` does not grant MCP
 access; only `SHIORI_ALLOWED_WORKSPACES` defines the server boundary.
 
-## Build the Initial Indexes
-
-Build one persistent SQLite index per workspace:
-
-```powershell
-shiori index build --allow F:\Projects\One
-shiori index build --allow F:\Projects\Two
-```
-
-Later builds are incremental. MCP clients can call `update_indexes` for selected
-or all authorized workspaces and receive a response after every update finishes.
-
 ## Start the Server
 
 ```powershell
@@ -50,7 +50,13 @@ The process listens only on loopback. Its MCP endpoint is
 `http://127.0.0.1:39473/mcp`; `http://127.0.0.1:39473/health` is the unauthenticated
 local health endpoint. Keep the server process running while clients use Shiori.
 
-## Claude Code
+## Register Clients
+
+Client registration controls where a client can discover Shiori. It does not
+grant filesystem access; `SHIORI_ALLOWED_WORKSPACES` remains the server-side
+authorization boundary.
+
+### Claude Code (recommended)
 
 Save or merge this complete project-scoped configuration as `.mcp.json` in the
 Claude Code project root:
@@ -74,7 +80,12 @@ Claude Code project root:
 reads the token from the client process environment. Do not replace the
 environment reference with the secret value.
 
-As a convenience, Shiori can generate the same JSON:
+Restart or reload Claude Code after changing the file, then inspect `/mcp`.
+
+### Claude Code generator (alternative)
+
+Run this from the Claude Code project root to generate the same project-scoped
+`.mcp.json` content:
 
 ```powershell
 shiori config claude > .mcp.json
@@ -85,7 +96,7 @@ Use redirection only when creating a new file because it overwrites the file. If
 Start Claude Code from an environment containing `SHIORI_MCP_TOKEN`, restart or
 reload it after changing the file, and inspect `/mcp`.
 
-## Codex
+### Codex (recommended)
 
 Add this complete server section to `%USERPROFILE%\.codex\config.toml`:
 
@@ -100,7 +111,11 @@ must use the port passed to `shiori serve`; no local start command is needed
 because Shiori runs separately. `bearer_token_env_var` tells Codex to read the
 bearer token from its process environment without storing the secret in TOML.
 
-As a convenience, Shiori can generate the same TOML section:
+Restart Codex or start a new task after changing the file.
+
+### Codex generator (alternative)
+
+Run this command to print the same user-scoped TOML section:
 
 ```powershell
 shiori config codex
@@ -109,12 +124,33 @@ shiori config codex
 Merge the output without replacing other Codex settings, ensure Codex receives
 `SHIORI_MCP_TOKEN`, then restart Codex or start a new task.
 
+## Multiple Workspaces
+
+Build one persistent SQLite index per authorized workspace:
+
+```powershell
+shiori index build --allow F:\Projects\One
+shiori index build --allow F:\Projects\Two
+```
+
+Later builds are incremental. MCP clients can call `update_indexes` for selected
+or all authorized workspaces and receive a response after every update finishes.
+Client scope and workspace authorization are independent: one registered client
+can access only paths listed in `SHIORI_ALLOWED_WORKSPACES`.
+
 ## Verify the Connection
 
-1. Confirm that the client lists the Shiori MCP server and its tools.
-2. Call `workspace_list` and confirm the authorized roots.
-3. Call `search_files` with a known filename.
-4. Call `update_indexes` and confirm that each requested workspace completes.
+Stop at the first failed stage and resolve it before continuing.
+
+1. Open `http://127.0.0.1:39473/health`. Pass: HTTP `200` with healthy status.
+2. Confirm that the client lists the `shiori` server and its tools. Pass: no
+   connection or authentication error.
+3. Call read-only `workspace_list`. Pass: every expected authorized root is
+   returned and no unauthorized root appears.
+4. Call read-only `search_files` with a known filename. Pass: the expected file
+   is returned with its workspace identity.
+5. Run `shiori doctor`. Pass: required checks are `ok`; optional dependencies
+   may report `warning`.
 
 `search_files` may target one workspace, several workspace paths, or all allowed
 workspaces. Results include workspace identity so clients can distinguish equal
