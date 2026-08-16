@@ -4,6 +4,12 @@ All notable changes to Shiori are documented in this file.
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-08-17
+
+### Added
+
+- `get_version` MCP tool returning the running Shiori server name and version.
+
 ### Documentation
 
 - Added package and security references required by the shared documentation standard.
