@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace Shiori.Core.Lsp;
 
 /// <summary>Lazily starts, shares, and recovers language-server connections.</summary>
-public sealed class LspServerManager : IAsyncDisposable
+public sealed class LspServerManager : ILspRequestRouter, IAsyncDisposable
 {
     private readonly ILspServerConnectionFactory _factory;
     private readonly ConcurrentDictionary<string, Lazy<Task<ILspServerConnection>>> _connections =

@@ -17,6 +17,7 @@ dotnet run --project src/Shiori.Cli -- grep <query> --allow <directory> [--glob 
 dotnet run --project src/Shiori.Cli -- index build --allow <directory>
 dotnet run --project src/Shiori.Cli -- index status --allow <directory>
 dotnet run --project src/Shiori.Cli -- index rebuild --allow <directory>
+dotnet run --project src/Shiori.Cli -- navigate definition <file> --line <line> --column <column> --allow <directory>
 dotnet run --project src/Shiori.Cli -- outline <source-file> --allow <directory>
 dotnet run --project src/Shiori.Cli -- symbol <query> --allow <directory> [--kind <kind>] [--language <language>]
 dotnet run --project src/Shiori.Cli -- workspace add <absolute-directory>
@@ -43,7 +44,7 @@ changes, and only added, changed, or deleted files update SQLite and symbols.
 The MCP server watches allowed workspaces recursively and debounces bursts of
 create, modify, rename, and delete events into incremental index builds.
 
-The MCP server exposes `search`, `workspace_list`, `index_status`, `reindex`,
+The MCP server exposes `search`, `navigate`, `workspace_list`, `index_status`, `reindex`,
 `search_files`, `search_text`, `search_symbols`, and `file_outline`. `reindex` builds a missing
 index by default; set `force` to `true` to run a full rescan.
 
@@ -76,6 +77,8 @@ For v1.1 semantic navigation, `doctor` discovers `csharp-ls` or `OmniSharp` on
 `PATH`. Set `SHIORI_CSHARP_LSP_PATH` to an absolute executable path to select a
 specific C# language server. Discovery does not start the server; LSP processes
 remain lazy and are started only by semantic-navigation tools.
+`navigate` currently supports the `definition` action. Input lines and columns
+are one-based; results use workspace-relative paths and one-based positions.
 
 ## Claude Code
 

@@ -1,6 +1,7 @@
 using System.Net;
 using ModelContextProtocol.AspNetCore;
 using ModelContextProtocol.Server;
+using Shiori.Core.Lsp;
 
 namespace Shiori.Cli.Server;
 
@@ -40,6 +41,8 @@ internal static class ShioriHttpServer
                     "Incremental index watcher failed for {Workspace}",
                     workspace));
         });
+        builder.Services.AddSingleton<ILspServerConnectionFactory, ProcessLspServerConnectionFactory>();
+        builder.Services.AddSingleton<LspServerManager>();
         builder.Services.AddMcpServer()
             .WithHttpTransport(transport => transport.Stateless = true)
             .WithTools<ShioriTools>();
