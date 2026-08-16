@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Shiori.Core.Lsp;
 using Shiori.Native;
 
 namespace Shiori.Cli;
@@ -19,6 +20,7 @@ internal static class DoctorRunner
     {
         var checks = new List<DoctorCheck>();
         AddNativeChecks(checks);
+        AddLspCheck(checks);
         AddDataCheck(checks);
         AddMcpChecks(checks);
         var status = checks.Any(check => check.Status == "error")
@@ -26,6 +28,17 @@ internal static class DoctorRunner
             : checks.Any(check => check.Status == "warning") ? "warning" : "ok";
         Console.WriteLine(JsonSerializer.Serialize(new DoctorReport(status, checks), JsonOptions));
         return status == "error" ? 1 : 0;
+    }
+
+    private static void AddLspCheck(List<DoctorCheck> checks)
+    {
+        var server = CSharpLanguageServerDiscovery.Find();
+        checks.Add(new DoctorCheck(
+            "lsp_csharp",
+            server is null ? "warning" : "ok",
+            server is null
+                ? $"not found; configure {CSharpLanguageServerDiscovery.PathVariable}"
+                : $"{server.ExecutablePath} ({server.Source})"));
     }
 
     private static void AddNativeChecks(List<DoctorCheck> checks)

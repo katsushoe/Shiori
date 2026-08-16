@@ -10,6 +10,7 @@ The C# host owns:
 - CLI and configuration
 - query planning and response shaping
 - native engine loading and ABI compatibility checks
+- language-server discovery, lifecycle, and LSP JSON-RPC
 
 The Rust engine owns:
 
@@ -25,6 +26,10 @@ closed through `shiori_engine_close`. No panic may cross the ABI boundary.
 
 SQLite connections and Tree-sitter objects must not be shared across the ABI.
 They remain entirely owned by the Rust engine.
+
+LSP processes remain outside the native ABI and are owned by the managed host.
+See [ADR 0001](adr/0001-lsp-engine.md) for lifecycle, fallback, and security
+decisions.
 
 Each canonical workspace has a stable SHA-256 ID and an isolated SQLite
 database. Schema migrations run transactionally when the native engine opens

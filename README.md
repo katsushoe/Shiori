@@ -72,6 +72,11 @@ Full index builds extract namespaces/modules, types, functions, methods,
 constructors, properties, fields, and constants into SQLite `symbols` while
 maintaining parent and qualified-name relationships.
 
+For v1.1 semantic navigation, `doctor` discovers `csharp-ls` or `OmniSharp` on
+`PATH`. Set `SHIORI_CSHARP_LSP_PATH` to an absolute executable path to select a
+specific C# language server. Discovery does not start the server; LSP processes
+remain lazy and are started only by semantic-navigation tools.
+
 ## Claude Code
 
 Run `shiori config claude > .mcp.json` in the Claude Code project, set
