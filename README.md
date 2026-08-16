@@ -32,12 +32,14 @@ dotnet run --project src/Shiori.Cli -- serve --port 39473
 
 The server exposes one stateless Streamable HTTP endpoint at
 `http://127.0.0.1:39473/mcp`. Set `SHIORI_MCP_TOKEN` to a random value of at
-least 32 characters and `SHIORI_ALLOWED_WORKSPACES` to a semicolon-separated
-list of absolute workspace paths before starting it.
+least 32 characters and `SHIORI_ALLOWED_WORKSPACES` to a path-list-separated
+list of absolute workspace paths before starting it. Use the OS path-list
+separator: `;` on Windows and `:` on macOS or Linux.
 
 Opening a configured workspace creates its SQLite database under the platform
 data directory (`%LOCALAPPDATA%\Shiori\indexes\<workspace-id>\shiori.db` on
-Windows). File indexing honors `.gitignore` plus Shiori's default build and
+Windows and `~/Library/Application Support/Shiori/indexes/<workspace-id>/shiori.db`
+on macOS). File indexing honors `.gitignore` plus Shiori's default build and
 dependency-directory exclusions. File-name searches lazily build and then use
 this persistent index. Running `index build` on a ready workspace performs an
 incremental scan: unchanged files are retained, content hashes confirm metadata
@@ -116,3 +118,8 @@ never read outside the canonical `--allow` workspace.
 On Windows x64, run `scripts/Publish-Windows.ps1` to build the Rust engine and
 the framework-dependent .NET host. The generated ZIP is written under
 `artifacts/` and requires the .NET 10 runtime.
+
+On macOS 15, run `scripts/publish-macos.sh` to generate a framework-dependent
+Apple Silicon (`osx-arm64`) or Intel (`osx-x64`) TAR.GZ package and SHA-256
+checksum. Both architectures are continuously tested and package-smoke-tested;
+see [`docs/macos.md`](docs/macos.md) for installation and build details.
