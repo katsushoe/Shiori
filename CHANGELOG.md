@@ -2,6 +2,18 @@
 
 All notable changes to Shiori are documented in this file.
 
+## [1.1.2] - 2026-08-17
+
+### Changed
+
+- Standardized Windows installations and ZIP packages on `bin`, `config`,
+  `logs`, and `data` directories beneath the selected installation root.
+- Changed the installed default workspace registry and index location to the
+  installation `data` directory while retaining `SHIORI_DATA_HOME` overrides.
+- Added writable standard-directory diagnostics to `shiori doctor`.
+- Bundled ripgrep 15.2.0 in Windows packages and made the native engine prefer
+  the bundled executable before falling back to `PATH`.
+
 ## [1.1.1] - 2026-08-17
 
 ### Added

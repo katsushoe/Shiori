@@ -4,7 +4,7 @@ using Shiori.Native;
 
 namespace Shiori.Cli;
 
-/// <summary>Persists CLI workspace registrations in the current user's local data directory.</summary>
+/// <summary>Persists CLI workspace registrations in the configured data directory.</summary>
 internal sealed class WorkspaceRegistry
 {
     private const int RegistryVersion = 1;
@@ -27,19 +27,7 @@ internal sealed class WorkspaceRegistry
     /// <summary>Gets the configured Shiori data root.</summary>
     internal static string GetDataRoot()
     {
-        var dataRoot = Environment.GetEnvironmentVariable("SHIORI_DATA_HOME");
-        if (string.IsNullOrWhiteSpace(dataRoot))
-        {
-            var localData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            if (string.IsNullOrWhiteSpace(localData))
-            {
-                throw new InvalidOperationException("The local application data directory is unavailable.");
-            }
-
-            dataRoot = Path.Combine(localData, "Shiori");
-        }
-
-        return Path.GetFullPath(dataRoot);
+        return InstallationLayout.GetDataDirectory();
     }
 
     /// <summary>Registers an existing workspace and initializes its persistent database.</summary>

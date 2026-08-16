@@ -8,7 +8,7 @@ Shioriは、AIコーディングエージェント向けの高速なローカル
 エンドポイントを公開し、ワークスペースごとに独立したSQLiteインデックスを
 保持します。
 
-製品バージョン: `1.1.1`
+製品バージョン: `1.1.2`
 
 ## はじめに
 
@@ -22,11 +22,14 @@ Shioriは、AIコーディングエージェント向けの高速なローカル
 ### Windowsインストーラ
 
 [最新リリース](https://github.com/katsushoe/Shiori/releases/latest)から
-`shiori-v1.1.1-win-x64-setup.exe`をダウンロードして実行します。
+`shiori-v1.1.2-win-x64-setup.exe`をダウンロードして実行します。
 **Add Shiori to the current user's PATH**を選択したまま進めてください。
 インストーラは自己完結型で、現在のユーザーにのみインストールされます。
-削除する場合はWindowsの「インストールされているアプリ」を使用します。
+指定したインストールルートの下に`bin`、`config`、`logs`、`data`を作成し、
+`bin`をPATHへ追加します。削除する場合はWindowsの「インストールされている
+アプリ」を使用します。アンインストール後も設定、ログ、データは保持されます。
 インストール後は新しいターミナルを開いてください。
+ripgrep 15.2.0も同梱されるため、本文検索に別途インストールは不要です。
 
 ```powershell
 shiori doctor
@@ -34,14 +37,14 @@ shiori doctor
 
 ### ZIPバイナリ
 
-最新リリースから`shiori-v1.1.1-win-x64.zip`と隣接するSHA-256ファイルを
-ダウンロードします。チェックサムを確認して任意の恒久ディレクトリへ展開し、
-そのディレクトリをユーザーの`PATH`へ追加してください。ZIPは自己完結型のため、
-.NETを別途インストールする必要はありません。
+最新リリースから`shiori-v1.1.2-win-x64.zip`と隣接するSHA-256ファイルを
+ダウンロードします。チェックサムを確認して任意の恒久的なインストールルートへ
+展開し、その`bin`ディレクトリをユーザーの`PATH`へ追加してください。ZIPにも
+インストーラと同じ標準構成が含まれ、.NETを別途インストールする必要はありません。
 
 ```powershell
-$expected = (Get-Content .\shiori-v1.1.1-win-x64.zip.sha256).Split()[0]
-$actual = (Get-FileHash .\shiori-v1.1.1-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+$expected = (Get-Content .\shiori-v1.1.2-win-x64.zip.sha256).Split()[0]
+$actual = (Get-FileHash .\shiori-v1.1.2-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($actual -ne $expected) { throw "Checksum mismatch" }
 ```
 
@@ -58,7 +61,7 @@ cargo build --release --manifest-path .\native\shiori-engine\Cargo.toml
 dotnet restore .\Shiori.slnx
 dotnet build .\Shiori.slnx --configuration Release --no-restore
 dotnet test .\Shiori.slnx --configuration Release --no-build
-.\scripts\Publish-Windows.ps1 -Version 1.1.1
+.\scripts\Publish-Windows.ps1 -Version 1.1.2
 ```
 
 配布スクリプトはインストーラ、ZIP、チェックサムを`artifacts/`へ出力します。

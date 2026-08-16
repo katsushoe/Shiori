@@ -7,8 +7,9 @@ environment variables; it does not currently read a product-specific settings fi
 
 ## Configuration Directory
 
-Workspace registrations and indexes are stored under `%LOCALAPPDATA%\Shiori` by
-default. Set `SHIORI_DATA_HOME` to replace that root.
+The installer and ZIP use `bin`, `config`, `logs`, and `data` below the selected
+installation root. Workspace registrations and indexes are stored in `data` by
+default. Set `SHIORI_DATA_HOME` to replace that directory.
 
 ## File Generation
 
@@ -23,7 +24,7 @@ default. Set `SHIORI_DATA_HOME` to replace that root.
 | :--- | :--- | :--- | :--- | :--- |
 | `SHIORI_MCP_TOKEN` | For `serve` | String | None | At least 32 characters |
 | `SHIORI_ALLOWED_WORKSPACES` | For `serve` | Path list | None | Existing absolute directories |
-| `SHIORI_DATA_HOME` | No | Absolute path | `%LOCALAPPDATA%\Shiori` | Writable directory |
+| `SHIORI_DATA_HOME` | No | Absolute path | `<install-root>\data` | Writable directory |
 | `SHIORI_EXCLUDE_PATTERNS` | No | Pattern list | None | `;`-separated gitignore-style patterns |
 | `SHIORI_CSHARP_LSP_PATH` | No | Absolute file path | Auto-discovery | Existing C# language-server executable |
 
@@ -54,8 +55,8 @@ $env:SHIORI_ALLOWED_WORKSPACES = 'F:\Projects\One;F:\Projects\Two'
 ### `SHIORI_DATA_HOME`
 
 Optional absolute directory for `workspaces.json` and per-workspace SQLite
-databases. The default is `%LOCALAPPDATA%\Shiori`. The directory is created when
-needed; the current user must be able to write it.
+databases. The default is the `data` directory below the installation root. The
+directory is created when needed; the current user must be able to write it.
 
 ```powershell
 $env:SHIORI_DATA_HOME = 'D:\ShioriData'

@@ -7,7 +7,8 @@
 
 ## 設定ディレクトリ
 
-ワークスペース登録とインデックスは、既定で`%LOCALAPPDATA%\Shiori`へ保存されます。
+インストーラとZIPは、指定したインストールルートの下に`bin`、`config`、`logs`、
+`data`を配置します。ワークスペース登録とインデックスは既定で`data`へ保存されます。
 保存先を変更する場合は`SHIORI_DATA_HOME`を設定します。
 
 ## ファイル生成
@@ -23,7 +24,7 @@
 | :--- | :--- | :--- | :--- | :--- |
 | `SHIORI_MCP_TOKEN` | `serve`で必須 | 文字列 | なし | 32文字以上 |
 | `SHIORI_ALLOWED_WORKSPACES` | `serve`で必須 | パスリスト | なし | 存在する絶対ディレクトリ |
-| `SHIORI_DATA_HOME` | 任意 | 絶対パス | `%LOCALAPPDATA%\Shiori` | 書き込み可能なディレクトリ |
+| `SHIORI_DATA_HOME` | 任意 | 絶対パス | `<インストールルート>\data` | 書き込み可能なディレクトリ |
 | `SHIORI_EXCLUDE_PATTERNS` | 任意 | パターンリスト | なし | `;`区切りのgitignore形式パターン |
 | `SHIORI_CSHARP_LSP_PATH` | 任意 | 絶対ファイルパス | 自動検出 | 存在するC#言語サーバー実行ファイル |
 
@@ -53,8 +54,8 @@ $env:SHIORI_ALLOWED_WORKSPACES = 'F:\Projects\One;F:\Projects\Two'
 ### `SHIORI_DATA_HOME`
 
 `workspaces.json`とワークスペース別SQLiteデータベースを保存する任意の絶対
-ディレクトリです。既定値は`%LOCALAPPDATA%\Shiori`です。必要時に作成されるため、
-現在のユーザーに書き込み権限が必要です。
+ディレクトリです。既定値はインストールルート直下の`data`です。必要時に作成される
+ため、現在のユーザーに書き込み権限が必要です。
 
 ```powershell
 $env:SHIORI_DATA_HOME = 'D:\ShioriData'

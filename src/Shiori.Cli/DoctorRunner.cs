@@ -21,7 +21,7 @@ internal static class DoctorRunner
         var checks = new List<DoctorCheck>();
         AddNativeChecks(checks);
         AddLspCheck(checks);
-        AddDataCheck(checks);
+        AddDirectoryChecks(checks);
         AddMcpChecks(checks);
         var status = checks.Any(check => check.Status == "error")
             ? "error"
@@ -73,13 +73,19 @@ internal static class DoctorRunner
         }
     }
 
-    private static void AddDataCheck(List<DoctorCheck> checks)
+    private static void AddDirectoryChecks(List<DoctorCheck> checks)
     {
-        var dataRoot = WorkspaceRegistry.GetDataRoot();
+        AddDirectoryCheck(checks, "config_directory", InstallationLayout.GetDirectory("config"));
+        AddDirectoryCheck(checks, "logs_directory", InstallationLayout.GetDirectory("logs"));
+        AddDirectoryCheck(checks, "data_directory", WorkspaceRegistry.GetDataRoot());
+    }
+
+    private static void AddDirectoryCheck(List<DoctorCheck> checks, string name, string path)
+    {
         try
         {
-            Directory.CreateDirectory(dataRoot);
-            var probePath = Path.Combine(dataRoot, $"doctor-{Guid.NewGuid():N}.tmp");
+            Directory.CreateDirectory(path);
+            var probePath = Path.Combine(path, $"doctor-{Guid.NewGuid():N}.tmp");
             using var stream = new FileStream(
                 probePath,
                 FileMode.CreateNew,
@@ -88,11 +94,11 @@ internal static class DoctorRunner
                 1,
                 FileOptions.DeleteOnClose);
             stream.WriteByte(0);
-            checks.Add(new DoctorCheck("data_directory", "ok", dataRoot));
+            checks.Add(new DoctorCheck(name, "ok", path));
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            checks.Add(new DoctorCheck("data_directory", "error", exception.Message));
+            checks.Add(new DoctorCheck(name, "error", exception.Message));
         }
     }
 

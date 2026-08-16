@@ -7,7 +7,7 @@ code search and semantic navigation are available as secondary capabilities.
 The server exposes a single Streamable HTTP MCP endpoint and keeps independent
 SQLite indexes for each workspace.
 
-Product version: `1.1.1`.
+Product version: `1.1.2`.
 
 ## Getting Started
 
@@ -20,11 +20,14 @@ Product version: `1.1.1`.
 
 ### Windows installer
 
-Download `shiori-v1.1.1-win-x64-setup.exe` from the
+Download `shiori-v1.1.2-win-x64-setup.exe` from the
 [latest release](https://github.com/katsushoe/Shiori/releases/latest), run it,
 and keep **Add Shiori to the current user's PATH** selected. The installer is
-self-contained, installs only for the current user, and can be removed from
-Windows **Installed apps**. Open a new terminal after installation.
+self-contained, installs only for the current user, and uses `bin`, `config`,
+`logs`, and `data` below the selected installation root. The installer adds
+`bin` to PATH and can be removed from Windows **Installed apps**. Configuration,
+logs, and data remain after uninstall. Open a new terminal after installation.
+The package includes ripgrep 15.2.0 for text search.
 
 ```powershell
 shiori doctor
@@ -32,14 +35,14 @@ shiori doctor
 
 ### ZIP binary
 
-Download `shiori-v1.1.1-win-x64.zip` from the latest release, verify the adjacent
-SHA-256 file, extract it to a permanent directory, and add that directory to
-your user `PATH`. The ZIP is self-contained and does not require a separate .NET
-installation.
+Download `shiori-v1.1.2-win-x64.zip` from the latest release, verify the adjacent
+SHA-256 file, extract it to a permanent installation root, and add its `bin`
+directory to your user `PATH`. The ZIP contains the same standard directory
+layout as the installer and does not require a separate .NET installation.
 
 ```powershell
-$expected = (Get-Content .\shiori-v1.1.1-win-x64.zip.sha256).Split()[0]
-$actual = (Get-FileHash .\shiori-v1.1.1-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+$expected = (Get-Content .\shiori-v1.1.2-win-x64.zip.sha256).Split()[0]
+$actual = (Get-FileHash .\shiori-v1.1.2-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($actual -ne $expected) { throw "Checksum mismatch" }
 ```
 
@@ -55,7 +58,7 @@ cargo build --release --manifest-path .\native\shiori-engine\Cargo.toml
 dotnet restore .\Shiori.slnx
 dotnet build .\Shiori.slnx --configuration Release --no-restore
 dotnet test .\Shiori.slnx --configuration Release --no-build
-.\scripts\Publish-Windows.ps1 -Version 1.1.1
+.\scripts\Publish-Windows.ps1 -Version 1.1.2
 ```
 
 The publish script writes the installer, ZIP, and checksum files to

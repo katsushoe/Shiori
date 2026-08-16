@@ -3,7 +3,7 @@ use globset::{Glob, GlobMatcher};
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 #[derive(Deserialize)]
 pub struct TextSearchRequest {
@@ -82,7 +82,7 @@ pub fn search(root: &Path, request: &TextSearchRequest) -> Result<TextSearchResp
         relative_target
     };
 
-    let mut command = Command::new("rg");
+    let mut command = crate::ripgrep::command();
     command
         .current_dir(&root)
         .arg("--json")

@@ -31,14 +31,23 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 ChangesEnvironment=yes
-UninstallDisplayIcon={app}\shiori.exe
+UninstallDisplayIcon={app}\bin\shiori.exe
 VersionInfoVersion={#AppVersion}.0
 
 [Tasks]
 Name: "addtopath"; Description: "Add Shiori to the current user's PATH"; Flags: checkedonce
 
+[Dirs]
+Name: "{app}\config"; Flags: uninsneveruninstall
+Name: "{app}\logs"; Flags: uninsneveruninstall
+Name: "{app}\data"; Flags: uninsneveruninstall
+
 [Files]
-Source: "{#SourceDirectory}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceDirectory}\bin\*"; DestDir: "{app}\bin"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceDirectory}\README.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDirectory}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDirectory}\CHANGELOG.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDirectory}\RELEASE_NOTES.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Shiori documentation"; Filename: "https://github.com/katsushoe/Shiori#readme"
@@ -96,11 +105,11 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if (CurStep = ssPostInstall) and WizardIsTaskSelected('addtopath') then
-    AddToPath(ExpandConstant('{app}'));
+    AddToPath(ExpandConstant('{app}\bin'));
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usUninstall then
-    RemoveFromPath(ExpandConstant('{app}'));
+    RemoveFromPath(ExpandConstant('{app}\bin'));
 end;

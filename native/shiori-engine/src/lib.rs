@@ -3,13 +3,13 @@
 use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::slice;
 
 mod ast_search;
 mod database;
 mod index;
 mod languages;
+mod ripgrep;
 mod symbols;
 mod text_search;
 
@@ -85,7 +85,7 @@ pub unsafe extern "C" fn shiori_engine_diagnostics(
         }
         let sqlite = database::sqlite_diagnostics().map_err(|message| (STATUS_IO, message))?;
         languages::validate_parsers().map_err(|message| (STATUS_IO, message))?;
-        let ripgrep_output = Command::new("rg").arg("--version").output();
+        let ripgrep_output = ripgrep::command().arg("--version").output();
         let (ripgrep_available, ripgrep_version) = match ripgrep_output {
             Ok(output) if output.status.success() => {
                 let version = String::from_utf8_lossy(&output.stdout)

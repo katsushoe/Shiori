@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "1.1.1",
+    [string]$Version = "1.1.2",
     [switch]$SkipInstaller
 )
 
@@ -9,6 +9,7 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $artifactsRoot = Join-Path $repoRoot "artifacts"
 $packageName = "shiori-v$Version-win-x64"
 $publishDirectory = Join-Path $artifactsRoot $packageName
+$binaryDirectory = Join-Path $publishDirectory "bin"
 $archivePath = Join-Path $artifactsRoot "$packageName.zip"
 $nativeDirectory = Join-Path $repoRoot "native\shiori-engine"
 $nativeLibrary = Join-Path $nativeDirectory "target\release\shiori_engine.dll"
@@ -18,6 +19,10 @@ if (Test-Path -LiteralPath $publishDirectory) {
 }
 
 New-Item -ItemType Directory -Force -Path $artifactsRoot | Out-Null
+New-Item -ItemType Directory -Force -Path $binaryDirectory | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $publishDirectory "config") | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $publishDirectory "logs") | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $publishDirectory "data") | Out-Null
 
 cargo build --release --manifest-path (Join-Path $nativeDirectory "Cargo.toml")
 if ($LASTEXITCODE -ne 0) {
@@ -27,14 +32,15 @@ if ($LASTEXITCODE -ne 0) {
 dotnet publish (Join-Path $repoRoot "src\Shiori.Cli\Shiori.Cli.csproj") `
     --configuration Release `
     --runtime win-x64 `
-    --output $publishDirectory `
+    --output $binaryDirectory `
     --disable-build-servers `
     --self-contained true
 if ($LASTEXITCODE -ne 0) {
     throw ".NET publish failed with exit code $LASTEXITCODE."
 }
 
-Copy-Item -LiteralPath $nativeLibrary -Destination $publishDirectory
+Copy-Item -LiteralPath $nativeLibrary -Destination $binaryDirectory
+& (Join-Path $PSScriptRoot "Stage-Ripgrep.ps1") -DestinationDirectory $binaryDirectory
 Copy-Item -LiteralPath (Join-Path $repoRoot "README.md") -Destination $publishDirectory
 Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSE") -Destination $publishDirectory
 Copy-Item -LiteralPath (Join-Path $repoRoot "CHANGELOG.md") -Destination $publishDirectory
@@ -45,7 +51,10 @@ if (Test-Path -LiteralPath $archivePath) {
     Remove-Item -LiteralPath $archivePath -Force
 }
 
-Compress-Archive -Path (Join-Path $publishDirectory "*") -DestinationPath $archivePath
+tar.exe -a -c -f $archivePath -C $publishDirectory .
+if ($LASTEXITCODE -ne 0) {
+    throw "ZIP packaging failed with exit code $LASTEXITCODE."
+}
 $hash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
 $checksumPath = "$archivePath.sha256"
 Set-Content -LiteralPath $checksumPath -Value "$hash  $packageName.zip" -Encoding ascii
