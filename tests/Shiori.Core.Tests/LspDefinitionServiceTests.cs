@@ -110,6 +110,29 @@ public sealed class LspDefinitionServiceTests : IDisposable
         Assert.Equal("First.cs", response.Locations[0].Path);
     }
 
+    [Fact]
+    public async Task NavigateAsync_requests_implementations_and_normalizes_location_link()
+    {
+        var source = CreateFile("Contract.cs");
+        var implementation = CreateFile("Service.cs");
+        var router = new FakeRouter(JsonSerializer.SerializeToElement(new
+        {
+            targetUri = new Uri(implementation).AbsoluteUri,
+            targetSelectionRange = new { start = new { line = 7, character = 3 } },
+        }));
+
+        var response = await LspNavigationService.NavigateAsync(
+            router, _workspace, source, 2, 4, "implementations", 20, _descriptor);
+
+        Assert.True(response.Success);
+        Assert.Equal("textDocument/implementation", router.Method);
+        Assert.False(router.Parameters.TryGetProperty("context", out _));
+        var location = Assert.Single(response.Locations);
+        Assert.Equal("Service.cs", location.Path);
+        Assert.Equal(8, location.Line);
+        Assert.Equal(4, location.Column);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_workspace))

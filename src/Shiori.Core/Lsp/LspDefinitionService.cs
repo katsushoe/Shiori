@@ -29,6 +29,7 @@ public static class LspNavigationService
         {
             "definition" => "textDocument/definition",
             "references" => "textDocument/references",
+            "implementations" => "textDocument/implementation",
             _ => throw new ArgumentException($"Unsupported navigation action: {action}", nameof(action)),
         };
 
