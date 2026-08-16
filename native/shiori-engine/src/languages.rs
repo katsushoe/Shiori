@@ -43,7 +43,7 @@ impl LanguageId {
         }
     }
 
-    fn grammar(self) -> Language {
+    pub(crate) fn grammar(self) -> Language {
         match self {
             Self::C => tree_sitter_c::LANGUAGE.into(),
             Self::Cpp => tree_sitter_cpp::LANGUAGE.into(),
@@ -55,6 +55,22 @@ impl LanguageId {
             Self::Rust => tree_sitter_rust::LANGUAGE.into(),
             Self::TypeScript => tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
             Self::Tsx => tree_sitter_typescript::LANGUAGE_TSX.into(),
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "c" => Some(Self::C),
+            "cpp" => Some(Self::Cpp),
+            "csharp" => Some(Self::CSharp),
+            "go" => Some(Self::Go),
+            "java" => Some(Self::Java),
+            "javascript" => Some(Self::JavaScript),
+            "python" => Some(Self::Python),
+            "rust" => Some(Self::Rust),
+            "typescript" => Some(Self::TypeScript),
+            "tsx" => Some(Self::Tsx),
+            _ => None,
         }
     }
 }

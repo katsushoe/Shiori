@@ -11,6 +11,7 @@ Product version: `1.0.0`.
 ## Commands
 
 ```text
+dotnet run --project src/Shiori.Cli -- ast <tree-sitter-query> --language <language> --allow <directory> [--path <path>] [--limit <count>]
 dotnet run --project src/Shiori.Cli -- find <query> --allow <directory> [--limit <count>]
 dotnet run --project src/Shiori.Cli -- search <query> --allow <directory> [--path <path>] [--limit <count>]
 dotnet run --project src/Shiori.Cli -- grep <query> --allow <directory> [--glob <glob>] [--regex]
@@ -44,7 +45,7 @@ changes, and only added, changed, or deleted files update SQLite and symbols.
 The MCP server watches allowed workspaces recursively and debounces bursts of
 create, modify, rename, and delete events into incremental index builds.
 
-The MCP server exposes `search`, `navigate`, `workspace_list`, `index_status`, `reindex`,
+The MCP server exposes `search`, `search_ast`, `navigate`, `workspace_list`, `index_status`, `reindex`,
 `search_files`, `search_text`, `search_symbols`, and `file_outline`. `reindex` builds a missing
 index by default; set `force` to `true` to run a full rescan.
 
@@ -82,6 +83,10 @@ and `callees` actions. Call hierarchy uses LSP prepare plus incoming or outgoing
 calls. Reference results include declarations. Navigation accepts `--limit` from
 1 to 100. Input lines and columns are one-based; results use workspace-relative
 paths and one-based positions.
+
+`search_ast` accepts a Tree-sitter query for one supported language and returns
+captured node paths, one-based positions, capture names, node kinds, and bounded
+single-line snippets. Optional `path` and `limit` arguments constrain the scan.
 
 ## Claude Code
 

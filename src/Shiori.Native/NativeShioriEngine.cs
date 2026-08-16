@@ -227,6 +227,37 @@ public sealed class NativeShioriEngine : IShioriEngine
     }
 
     /// <inheritdoc />
+    public unsafe IReadOnlyList<AstSearchResult> SearchAst(
+        string language,
+        string pattern,
+        string? path = null,
+        int limit = 20)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentException.ThrowIfNullOrWhiteSpace(language);
+        ArgumentException.ThrowIfNullOrWhiteSpace(pattern);
+        ArgumentOutOfRangeException.ThrowIfLessThan(limit, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(limit, 100);
+        var request = JsonSerializer.Serialize(new { language, pattern, path, limit }, JsonOptions);
+        var bytes = Encoding.UTF8.GetBytes(request);
+        fixed (byte* pointer = bytes)
+        {
+            var status = NativeAbi.SearchAst(
+                _handle, pointer, (nuint)bytes.Length, out var result, out var error);
+            if (status != 0) throw CreateException(error, "Native AST search failed.");
+            try
+            {
+                return JsonSerializer.Deserialize<AstSearchResponse>(ReadBuffer(result), JsonOptions)?.Results
+                    ?? throw new ShioriEngineException("Native engine returned an invalid AST search response.");
+            }
+            finally
+            {
+                NativeAbi.FreeBuffer(result);
+            }
+        }
+    }
+
+    /// <inheritdoc />
     public void Dispose()
     {
         if (_disposed) return;
@@ -277,6 +308,8 @@ public sealed class NativeShioriEngine : IShioriEngine
     }
 
     private sealed record SearchResponse(IReadOnlyList<SearchResult> Results);
+
+    private sealed record AstSearchResponse(IReadOnlyList<AstSearchResult> Results);
 
     private delegate int IndexOperation(
         ShioriEngineHandle handle,

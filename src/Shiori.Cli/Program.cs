@@ -21,6 +21,7 @@ static int Run(string[] arguments)
     {
         return arguments[0] switch
         {
+            "ast" => RunAst(arguments[1..]),
             "find" => RunFind(arguments[1..]),
             "grep" => RunGrep(arguments[1..]),
             "index" => RunIndex(arguments[1..]),
@@ -39,6 +40,25 @@ static int Run(string[] arguments)
     {
         return Fail(exception.Message);
     }
+}
+
+static int RunAst(string[] arguments)
+{
+    if (arguments.Length == 0) return Fail("ast requires a Tree-sitter query pattern.");
+    var language = GetOption(arguments, "--language")
+        ?? throw new ArgumentException("--language is required.");
+    var workspace = GetOption(arguments, "--allow")
+        ?? throw new ArgumentException("--allow is required.");
+    var limit = int.TryParse(GetOption(arguments, "--limit"), out var parsed) ? parsed : 20;
+    using var engine = NativeShioriEngine.Open(workspace);
+    var response = new AstSearchResponse(
+        engine.SearchAst(language, arguments[0], GetOption(arguments, "--path"), limit));
+    Console.WriteLine(JsonSerializer.Serialize(response, new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        WriteIndented = true,
+    }));
+    return 0;
 }
 
 static int RunNavigate(string[] arguments)
@@ -248,6 +268,8 @@ static int Fail(string message)
 
 static string Usage() => """
     Usage:
+      shiori ast <tree-sitter-query> --language <language> --allow <directory>
+        [--path <path>] [--limit <1-100>]
       shiori find <query> --allow <directory> [--limit <1-100>]
       shiori search <query> --allow <directory> [--path <path>] [--limit <1-100>]
       shiori grep <query> --allow <directory> [--path <path>] [--glob <glob>]

@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::slice;
 
+mod ast_search;
 mod database;
 mod index;
 mod languages;
@@ -15,7 +16,7 @@ mod text_search;
 use database::{IndexStatus, WorkspaceDatabase};
 use serde::{Deserialize, Serialize};
 
-const ABI_VERSION: u32 = 1;
+const ABI_VERSION: u32 = 2;
 const STATUS_INVALID_ARGUMENT: i32 = 1;
 const STATUS_IO: i32 = 2;
 const STATUS_PANIC: i32 = 255;
@@ -337,6 +338,43 @@ pub unsafe extern "C" fn shiori_engine_search_symbols(
             (
                 STATUS_IO,
                 format!("cannot serialize symbol search response: {source}"),
+            )
+        })?;
+        unsafe { *result = NativeBuffer::from_string(json) };
+        Ok(())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn shiori_engine_search_ast(
+    handle: *mut c_void,
+    request: *const u8,
+    request_length: usize,
+    result: *mut NativeBuffer,
+    error: *mut NativeBuffer,
+) -> i32 {
+    ffi_boundary(error, || {
+        if handle.is_null() || result.is_null() {
+            return Err((
+                STATUS_INVALID_ARGUMENT,
+                "invalid AST search arguments".to_owned(),
+            ));
+        }
+        let engine = unsafe { &*handle.cast::<Engine>() };
+        let request = unsafe { read_utf8(request, request_length) }?;
+        let request: ast_search::AstSearchRequest =
+            serde_json::from_str(request).map_err(|source| {
+                (
+                    STATUS_INVALID_ARGUMENT,
+                    format!("invalid AST search request: {source}"),
+                )
+            })?;
+        let response = ast_search::search(&engine.root, &request)
+            .map_err(|message| (STATUS_INVALID_ARGUMENT, message))?;
+        let json = serde_json::to_string(&response).map_err(|source| {
+            (
+                STATUS_IO,
+                format!("cannot serialize AST search response: {source}"),
             )
         })?;
         unsafe { *result = NativeBuffer::from_string(json) };

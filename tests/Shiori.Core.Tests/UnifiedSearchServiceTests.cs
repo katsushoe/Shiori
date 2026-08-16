@@ -65,7 +65,7 @@ public sealed class UnifiedSearchServiceTests
         private int _symbolSearches;
         private int _textSearches;
 
-        public uint AbiVersion => 1;
+        public uint AbiVersion => 2;
         public int FileSearches => _fileSearches;
         public int SymbolSearches => _symbolSearches;
         public int TextSearches => _textSearches;
@@ -89,6 +89,12 @@ public sealed class UnifiedSearchServiceTests
                 "symbol", "SaveAccount", "Service::SaveAccount", "method", "csharp",
                 "Service.cs", 10, 5, 1, "void SaveAccount()")];
         }
+
+        public IReadOnlyList<AstSearchResult> SearchAst(
+            string language,
+            string pattern,
+            string? path = null,
+            int limit = 20) => [];
 
         public IReadOnlyList<SearchResult> SearchText(
             string query,

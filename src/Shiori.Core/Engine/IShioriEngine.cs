@@ -32,6 +32,13 @@ public interface IShioriEngine : IDisposable
         string? path = null,
         int limit = 20);
 
+    /// <summary>Searches syntax trees with a Tree-sitter query pattern.</summary>
+    IReadOnlyList<AstSearchResult> SearchAst(
+        string language,
+        string pattern,
+        string? path = null,
+        int limit = 20);
+
     /// <summary>Searches workspace file contents through ripgrep.</summary>
     IReadOnlyList<SearchResult> SearchText(
         string query,

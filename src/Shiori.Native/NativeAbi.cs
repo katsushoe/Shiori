@@ -5,7 +5,7 @@ namespace Shiori.Native;
 internal static partial class NativeAbi
 {
     internal const string LibraryName = "shiori_engine";
-    internal const uint SupportedAbiVersion = 1;
+    internal const uint SupportedAbiVersion = 2;
 
     [StructLayout(LayoutKind.Sequential)]
     internal readonly struct NativeBuffer
@@ -46,6 +46,14 @@ internal static partial class NativeAbi
 
     [LibraryImport(LibraryName, EntryPoint = "shiori_engine_search_symbols")]
     internal static unsafe partial int SearchSymbols(
+        ShioriEngineHandle handle,
+        byte* request,
+        nuint requestLength,
+        out NativeBuffer result,
+        out NativeBuffer error);
+
+    [LibraryImport(LibraryName, EntryPoint = "shiori_engine_search_ast")]
+    internal static unsafe partial int SearchAst(
         ShioriEngineHandle handle,
         byte* request,
         nuint requestLength,

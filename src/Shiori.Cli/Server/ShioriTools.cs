@@ -9,6 +9,22 @@ namespace Shiori.Cli.Server;
 [McpServerToolType]
 internal sealed class ShioriTools
 {
+    [McpServerTool(Name = "search_ast", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Searches source syntax trees with a Tree-sitter query pattern.")]
+    public static AstSearchResponse SearchAst(
+        [Description("Tree-sitter language name, such as csharp, rust, or typescript.")] string language,
+        [Description("Tree-sitter query containing one or more captures.")] string pattern,
+        [Description("Absolute path of the allowed workspace.")] string workspace,
+        NativeEngineRegistry registry,
+        [Description("Optional relative path prefix within the workspace.")] string? path = null,
+        [Description("Maximum captures from 1 to 100.")] int limit = 20,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return new AstSearchResponse(
+            registry.GetEngine(workspace).SearchAst(language, pattern, path, limit));
+    }
+
     [McpServerTool(Name = "navigate", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Navigates from a source position using a lazily started language server.")]
     public static Task<NavigationResponse> Navigate(
