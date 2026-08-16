@@ -65,6 +65,18 @@ public sealed class LspJsonRpcTransport : IAsyncDisposable
         }
     }
 
+    /// <summary>Sends a JSON-RPC notification without waiting for a response.</summary>
+    public Task SendNotificationAsync(
+        string method,
+        object? parameters,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentException.ThrowIfNullOrWhiteSpace(method);
+        cancellationToken.ThrowIfCancellationRequested();
+        return WriteMessageAsync(null, method, parameters, cancellationToken);
+    }
+
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
@@ -103,13 +115,25 @@ public sealed class LspJsonRpcTransport : IAsyncDisposable
         object? parameters,
         CancellationToken cancellationToken)
     {
+        await WriteMessageAsync(id, method, parameters, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task WriteMessageAsync(
+        long? id,
+        string method,
+        object? parameters,
+        CancellationToken cancellationToken)
+    {
         var request = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
             ["jsonrpc"] = "2.0",
-            ["id"] = id,
             ["method"] = method,
             ["params"] = parameters,
         };
+        if (id.HasValue)
+        {
+            request["id"] = id.Value;
+        }
         var content = JsonSerializer.SerializeToUtf8Bytes(request);
         var header = Encoding.ASCII.GetBytes(
             $"Content-Length: {content.Length.ToString(CultureInfo.InvariantCulture)}\r\n\r\n");

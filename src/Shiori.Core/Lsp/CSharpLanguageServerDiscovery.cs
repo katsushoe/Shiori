@@ -37,7 +37,10 @@ public static class CSharpLanguageServerDiscovery
                 var executablePath = Path.Combine(directory, windows ? $"{candidate}.exe" : candidate);
                 if (File.Exists(executablePath))
                 {
-                    return new LanguageServerDescriptor("csharp", executablePath, "PATH");
+                    var arguments = string.Equals(candidate, "OmniSharp", StringComparison.Ordinal)
+                        ? new[] { "-lsp" }
+                        : [];
+                    return new LanguageServerDescriptor("csharp", executablePath, "PATH", arguments);
                 }
             }
         }

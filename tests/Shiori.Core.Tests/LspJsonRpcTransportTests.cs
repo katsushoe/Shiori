@@ -51,6 +51,20 @@ public sealed class LspJsonRpcTransportTests
             () => transport.SendRequestAsync("initialize", null));
     }
 
+    [Fact]
+    public async Task SendNotificationAsync_writes_frame_without_request_id()
+    {
+        await using var input = new MemoryStream();
+        await using var output = new MemoryStream();
+        await using var transport = new LspJsonRpcTransport(input, output);
+
+        await transport.SendNotificationAsync("initialized", new { });
+
+        var notification = ReadPayload(output);
+        Assert.Equal("initialized", notification.GetProperty("method").GetString());
+        Assert.False(notification.TryGetProperty("id", out _));
+    }
+
     private static MemoryStream ResponseStream(string json)
     {
         var content = Encoding.UTF8.GetBytes(json);
