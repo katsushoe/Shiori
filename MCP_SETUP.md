@@ -1,5 +1,7 @@
 # Shiori MCP Setup
 
+[English](MCP_SETUP.md) | [日本語](MCP_SETUP.ja.md)
+
 This guide connects a locally running Shiori server to an AI coding agent. For
 all environment variables, see [CONFIG.md](CONFIG.md); for CLI details, see
 [COMMANDS.md](COMMANDS.md).

@@ -1,5 +1,7 @@
 # Shiori Commands
 
+[English](COMMANDS.md) | [日本語](COMMANDS.ja.md)
+
 This is the detailed reference for the Shiori CLI. All successful query and
 management commands write JSON to standard output; errors go to standard error.
 

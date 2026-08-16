@@ -105,9 +105,9 @@ MCPエンドポイントは`http://127.0.0.1:39473/mcp`です。
 
 ## ドキュメント
 
-- [CLIコマンドリファレンス（英語）](COMMANDS.md)
-- [設定リファレンス（英語）](CONFIG.md)
-- [MCP設定ガイド（英語）](MCP_SETUP.md)
+- [CLIコマンドリファレンス](COMMANDS.ja.md)
+- [設定リファレンス](CONFIG.ja.md)
+- [MCP設定ガイド](MCP_SETUP.ja.md)
 - [アーキテクチャ（英語）](docs/architecture.md)
 - [仕様書（日本語）](docs/specification.ja.md)
 - [マルチワークスペース連携ADR（英語）](docs/adr/0002-multi-workspace-coordination.md)

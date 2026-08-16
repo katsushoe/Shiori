@@ -1,5 +1,7 @@
 # Shiori Configuration
 
+[English](CONFIG.md) | [日本語](CONFIG.ja.md)
+
 This document is the reference for Shiori runtime configuration. Shiori uses
 environment variables; it does not currently read a product-specific settings file.
 
