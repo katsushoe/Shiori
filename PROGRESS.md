@@ -4,8 +4,8 @@
 
 ## 完成度
 
-- v1全体: **95%**（仕様書のv1完成条件20項目中19項目完了）
-- 現在のフェーズ: **v1 Client Integration — 50%**（2項目中1項目完了）
+- v1全体: **100%**（仕様書のv1完成条件20項目中20項目完了）
+- 現在のフェーズ: **v1 Client Integration — 100%**（2項目中2項目完了）
 
 ## Phase 2（完了）
 
@@ -24,9 +24,10 @@
 ## v1 Client Integration
 
 - [x] Claude Code integration
-- [ ] Codex integration
+- [x] Codex integration
 
 Claude Code 2.1.233でStreamable HTTP接続と`search` Tool実行を確認済み。
+Codex CLI 0.147.0でStreamable HTTP接続と`search` Tool実行を確認済み。
 
 ## v1完了済み
 
@@ -36,7 +37,7 @@ Text search、Symbol search、File outline、Index status、CLI、Windows suppor
 
 ## v1残作業（優先順）
 
-1. Codex integration
+なし。
 
 ## 算定基準
 
