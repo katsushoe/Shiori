@@ -47,7 +47,7 @@ static int RunConfig(string[] arguments)
     var configuration = arguments[0] switch
     {
         "claude" => ClaudeCodeConfigGenerator.Generate(port, name),
-        "codex" => throw new ArgumentException("Codex configuration is not implemented yet."),
+        "codex" => CodexConfigGenerator.Generate(port, name),
         _ => throw new ArgumentException($"Unknown config target: {arguments[0]}")
     };
     Console.WriteLine(configuration);
@@ -231,5 +231,6 @@ static string Usage() => """
       shiori workspace remove <name-or-id-or-absolute-directory>
       shiori doctor
       shiori config claude [--port <1-65535>] [--name <server-name>]
+      shiori config codex [--port <1-65535>] [--name <server-name>]
       shiori serve [--port <1-65535>]
     """;

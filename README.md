@@ -24,6 +24,7 @@ dotnet run --project src/Shiori.Cli -- workspace list
 dotnet run --project src/Shiori.Cli -- workspace remove <name-or-id-or-absolute-directory>
 dotnet run --project src/Shiori.Cli -- doctor
 dotnet run --project src/Shiori.Cli -- config claude > .mcp.json
+dotnet run --project src/Shiori.Cli -- config codex
 dotnet run --project src/Shiori.Cli -- serve --port 39473
 ```
 
@@ -78,6 +79,14 @@ Run `shiori config claude > .mcp.json` in the Claude Code project, set
 then restart Claude Code and inspect `/mcp`. The generated project-scoped config
 uses Streamable HTTP at `http://127.0.0.1:39473/mcp` and references the token by
 environment variable instead of writing its value to disk.
+
+## Codex
+
+Run `shiori config codex` and merge the generated TOML into
+`%USERPROFILE%\.codex\config.toml`. Set `SHIORI_MCP_TOKEN` to the same bearer
+token used by the running Shiori server, then start a new Codex task. The
+generated config uses Streamable HTTP at `http://127.0.0.1:39473/mcp` and reads
+the token from the environment without writing its value to disk.
 
 Set `SHIORI_EXCLUDE_PATTERNS` to semicolon-separated gitignore-style glob
 patterns (for example, `generated/**;*.min.js`) to add workspace exclusions.
