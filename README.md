@@ -1,5 +1,7 @@
 # Shiori
 
+[English](README.md) | [日本語](README.ja.md)
+
 Shiori is a fast, local-first file search server for AI coding agents. Indexed
 code search and semantic navigation are available as secondary capabilities.
 The server exposes a single Streamable HTTP MCP endpoint and keeps independent
