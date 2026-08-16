@@ -7,7 +7,7 @@ The C# host owns MCP, CLI, configuration, and query planning. A Rust Native DLL
 owns performance-sensitive search, indexing, SQLite, and Tree-sitter operations
 behind a versioned C ABI.
 
-Product version: `1.0.0`.
+Product version: `1.1.0`.
 
 ## Commands
 
