@@ -69,6 +69,8 @@ pub extern "C" fn shiori_engine_abi_version() -> u32 {
     ABI_VERSION
 }
 
+/// # Safety
+/// `result` and `error`, when non-null, must point to writable `NativeBuffer` values.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shiori_engine_diagnostics(
     result: *mut NativeBuffer,
@@ -113,6 +115,9 @@ pub unsafe extern "C" fn shiori_engine_diagnostics(
     })
 }
 
+/// # Safety
+/// `workspace` must be readable for `workspace_length` bytes. `handle` and `error`,
+/// when non-null, must point to writable values.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shiori_engine_open(
     workspace: *const u8,
@@ -143,6 +148,9 @@ pub unsafe extern "C" fn shiori_engine_open(
     })
 }
 
+/// # Safety
+/// `handle` must be an open engine handle. `result` and `error`, when non-null,
+/// must point to writable `NativeBuffer` values.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shiori_engine_workspace_info(
     handle: *mut c_void,
@@ -171,6 +179,9 @@ pub unsafe extern "C" fn shiori_engine_workspace_info(
     })
 }
 
+/// # Safety
+/// `handle` must be an open engine handle and `query` must be readable for
+/// `query_length` bytes. Output pointers, when non-null, must be writable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shiori_engine_search_files(
     handle: *mut c_void,
@@ -211,6 +222,9 @@ pub unsafe extern "C" fn shiori_engine_search_files(
     })
 }
 
+/// # Safety
+/// `handle` must be an open engine handle. `result` and `error`, when non-null,
+/// must point to writable `NativeBuffer` values.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shiori_engine_index_status(
     handle: *mut c_void,
@@ -223,6 +237,9 @@ pub unsafe extern "C" fn shiori_engine_index_status(
     })
 }
 
+/// # Safety
+/// `handle` must be an open engine handle. `result` and `error`, when non-null,
+/// must point to writable `NativeBuffer` values.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shiori_engine_index_build(
     handle: *mut c_void,
@@ -244,6 +261,9 @@ pub unsafe extern "C" fn shiori_engine_index_build(
     })
 }
 
+/// # Safety
+/// `handle` must be an open engine handle. `result` and `error`, when non-null,
+/// must point to writable `NativeBuffer` values.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shiori_engine_index_rebuild(
     handle: *mut c_void,
@@ -257,6 +277,9 @@ pub unsafe extern "C" fn shiori_engine_index_rebuild(
     })
 }
 
+/// # Safety
+/// `handle` must be an open engine handle and `request` must be readable for
+/// `request_length` bytes. Output pointers, when non-null, must be writable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shiori_engine_search_text(
     handle: *mut c_void,
@@ -294,6 +317,9 @@ pub unsafe extern "C" fn shiori_engine_search_text(
     })
 }
 
+/// # Safety
+/// `handle` must be an open engine handle and `request` must be readable for
+/// `request_length` bytes. Output pointers, when non-null, must be writable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shiori_engine_search_symbols(
     handle: *mut c_void,
@@ -345,6 +371,9 @@ pub unsafe extern "C" fn shiori_engine_search_symbols(
     })
 }
 
+/// # Safety
+/// `handle` must be an open engine handle and `request` must be readable for
+/// `request_length` bytes. Output pointers, when non-null, must be writable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shiori_engine_search_ast(
     handle: *mut c_void,
@@ -382,6 +411,9 @@ pub unsafe extern "C" fn shiori_engine_search_ast(
     })
 }
 
+/// # Safety
+/// `handle` must be an open engine handle and `path` must be readable for
+/// `path_length` bytes. Output pointers, when non-null, must be writable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shiori_engine_file_outline(
     handle: *mut c_void,
@@ -422,6 +454,9 @@ pub unsafe extern "C" fn shiori_engine_file_outline(
     })
 }
 
+/// # Safety
+/// `handle` must have been returned by `shiori_engine_open`, must not already be
+/// closed, and must not be used after this call succeeds.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shiori_engine_close(handle: *mut c_void) -> bool {
     if handle.is_null() {
@@ -433,6 +468,9 @@ pub unsafe extern "C" fn shiori_engine_close(handle: *mut c_void) -> bool {
     .is_ok()
 }
 
+/// # Safety
+/// `buffer` must have been returned by this library and must not have already
+/// been freed. Its pointer, length, and capacity must remain unchanged.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shiori_engine_free_buffer(buffer: NativeBuffer) {
     if buffer.pointer.is_null() {

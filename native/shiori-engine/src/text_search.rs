@@ -139,10 +139,10 @@ pub fn search(root: &Path, request: &TextSearchRequest) -> Result<TextSearchResp
         if message.message_type != "match" {
             continue;
         }
-        if let Some(result) = convert_match(&root, message.data, request.context_lines)? {
-            if matches_glob(glob.as_ref(), &result.path) {
-                results.push(result);
-            }
+        if let Some(result) = convert_match(&root, message.data, request.context_lines)?
+            && matches_glob(glob.as_ref(), &result.path)
+        {
+            results.push(result);
         }
         if results.len() >= request.limit {
             child
