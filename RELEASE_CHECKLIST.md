@@ -7,4 +7,4 @@
 - [x] Changelog and release notes prepared
 - [x] Commit and push release-preparation changes
 - [x] Create signed or annotated `v1.0.0` tag
-- [ ] Publish GitHub Release with ZIP and release notes
+- [x] Publish GitHub Release with ZIP and release notes
