@@ -27,6 +27,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy,rustfmt
+      - name: Install runtime dependencies
+        run: brew install ripgrep
       - name: Restore .NET dependencies
         run: dotnet restore
       - name: Check Rust formatting
