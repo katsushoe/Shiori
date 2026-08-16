@@ -48,7 +48,8 @@ index by default; set `force` to `true` to run a full rescan.
 The managed query planner classifies file paths, code identifiers, quoted text,
 and reference or implementation intent into deterministic file, symbol, and
 text-provider plans. The unified `search` tool executes selected providers in
-parallel, interleaves their bounded results, and reports recoverable provider errors.
+parallel, ranks exact and prefix symbol matches ahead of filenames, paths, and
+text matches, deduplicates code locations, and reports recoverable provider errors.
 
 CLI workspace registrations are stored in the current user's local application
 data directory. Removing a registration preserves its SQLite index database.

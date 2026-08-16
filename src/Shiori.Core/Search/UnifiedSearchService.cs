@@ -33,7 +33,10 @@ public static class UnifiedSearchService
                 execution => execution.Provider.ToString().ToLowerInvariant(),
                 execution => execution.Error!,
                 StringComparer.Ordinal);
-        var results = RoundRobin(executions, limit);
+        var results = SearchRanker.Rank(
+            plan.SearchQuery,
+            executions.SelectMany(execution => execution.Results),
+            limit);
         return new UnifiedSearchResponse(plan, results, errors);
     }
 
@@ -48,11 +51,12 @@ public static class UnifiedSearchService
         {
             var results = provider switch
             {
-                SearchProvider.File => engine.SearchFiles(query, limit).Select(FromSearchResult).ToArray(),
+                SearchProvider.File => engine.SearchFiles(query, limit)
+                    .Select(result => FromSearchResult(result, "file")).ToArray(),
                 SearchProvider.Symbol => engine.SearchSymbols(query, path: path, limit: limit)
                     .Select(FromSymbolResult).ToArray(),
                 SearchProvider.Text => engine.SearchText(query, path: path, limit: limit)
-                    .Select(FromSearchResult).ToArray(),
+                    .Select(result => FromSearchResult(result, "text")).ToArray(),
                 _ => throw new ArgumentOutOfRangeException(nameof(provider)),
             };
             return new ProviderExecution(provider, results, null);
@@ -63,9 +67,9 @@ public static class UnifiedSearchService
         }
     }
 
-    private static UnifiedSearchResult FromSearchResult(SearchResult result) => new(
+    private static UnifiedSearchResult FromSearchResult(SearchResult result, string provider) => new(
         result.Type,
-        result.Type,
+        provider,
         result.Path,
         result.Line,
         result.Column,
@@ -73,7 +77,9 @@ public static class UnifiedSearchService
         null,
         null,
         null,
-        result.Snippet);
+        result.Snippet,
+        null,
+        [provider]);
 
     private static UnifiedSearchResult FromSymbolResult(SymbolSearchResult result) => new(
         result.Type,
@@ -85,36 +91,9 @@ public static class UnifiedSearchService
         result.Kind,
         result.Language,
         result.Score,
-        result.Signature);
-
-    private static IReadOnlyList<UnifiedSearchResult> RoundRobin(
-        IReadOnlyList<ProviderExecution> executions,
-        int limit)
-    {
-        var results = new List<UnifiedSearchResult>(limit);
-        for (var index = 0; results.Count < limit; index++)
-        {
-            var added = false;
-            foreach (var execution in executions)
-            {
-                if (index < execution.Results.Count)
-                {
-                    results.Add(execution.Results[index]);
-                    added = true;
-                    if (results.Count == limit)
-                    {
-                        break;
-                    }
-                }
-            }
-
-            if (!added)
-            {
-                break;
-            }
-        }
-        return results;
-    }
+        result.Signature,
+        result.QualifiedName,
+        ["symbol"]);
 
     private sealed record ProviderExecution(
         SearchProvider Provider,

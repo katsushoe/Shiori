@@ -11,7 +11,9 @@ public sealed record UnifiedSearchResult(
     string? Kind,
     string? Language,
     double? Score,
-    string? Snippet);
+    string? Snippet,
+    string? QualifiedName,
+    IReadOnlyList<string> MatchedProviders);
 
 /// <summary>A unified search response including its execution plan and recoverable provider errors.</summary>
 public sealed record UnifiedSearchResponse(
