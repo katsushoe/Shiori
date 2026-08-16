@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Reflection;
 using ModelContextProtocol.Server;
 using Shiori.Core.Engine;
 using Shiori.Core.Lsp;
@@ -9,6 +10,17 @@ namespace Shiori.Cli.Server;
 [McpServerToolType]
 internal sealed class ShioriTools
 {
+    [McpServerTool(Name = "get_version", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Returns the running Shiori MCP server name and version.")]
+    public static ServerVersionInfo GetVersion()
+    {
+        var version = typeof(ShioriTools).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? typeof(ShioriTools).Assembly.GetName().Version?.ToString()
+            ?? "unknown";
+        return new ServerVersionInfo("Shiori", version);
+    }
+
     [McpServerTool(Name = "search_ast", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Searches source syntax trees with a Tree-sitter query pattern.")]
     public static AstSearchResponse SearchAst(
