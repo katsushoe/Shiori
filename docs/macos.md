@@ -1,8 +1,11 @@
 # macOS support
 
-Shiori supports macOS 15 on Apple Silicon (`arm64`) and Intel (`x64`). Both
-architectures run the Rust and .NET test suites, package build, Native ABI
-loading, diagnostics, and an AST-search smoke test in GitHub Actions.
+**Formal macOS distribution is not planned.** Windows is the only officially
+released and supported platform. macOS 15 on Apple Silicon (`arm64`) and
+Intel (`x64`) is exercised in CI (test suites, package build, Native ABI
+loading, diagnostics, and an AST-search smoke test) for portability, and the
+build steps below are provided for anyone building from source at their own
+risk, but no official macOS package is published or supported.
 
 ## Requirements
 

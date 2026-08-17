@@ -1939,11 +1939,11 @@ LSP References
 LSP Implementations
 Call hierarchy
 AST pattern search
-macOS正式対応
-Linux正式対応
 ```
 
 LSPについて実装が安定する場合はv1へ前倒し可能。
+
+macOS正式対応・Linux正式対応は対応しない（2026.08.17決定）。Windowsを唯一の正式対象プラットフォームとする。
 
 ---
 
