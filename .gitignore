@@ -4,6 +4,7 @@
 **/obj/
 /artifacts/
 /.local/
+/.wix/
 *.db
 *.db-shm
 *.db-wal

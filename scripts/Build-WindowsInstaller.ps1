@@ -12,6 +12,7 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $sourceDirectory = (Resolve-Path $PublishDirectory).Path
 $outputDirectory = Join-Path $repoRoot "artifacts"
 $installerSource = Join-Path $repoRoot "installer\Shiori.wxs"
+$licenseRtf = Join-Path $repoRoot "installer\License.rtf"
 $installerPath = Join-Path $outputDirectory "shiori-v$Version-win-x64-setup.msi"
 
 $wix = Get-Command "wix.exe" -ErrorAction SilentlyContinue
@@ -24,8 +25,10 @@ if ($null -eq $wix) {
 
 & $wix.Source build `
     -arch x64 `
+    -ext WixToolset.UI.wixext `
     -d "AppVersion=$Version" `
     -d "SourceDirectory=$sourceDirectory" `
+    -d "LicenseRtf=$licenseRtf" `
     -out $installerPath `
     $installerSource
 if ($LASTEXITCODE -ne 0) {
