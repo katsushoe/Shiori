@@ -18,8 +18,9 @@ internal sealed class ShioriTools
     public static ServerVersionInfo GetVersion()
     {
         var version = typeof(ShioriTools).Assembly
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-            ?? typeof(ShioriTools).Assembly.GetName().Version?.ToString()
+            .GetName().Version?.ToString()
+            ?? typeof(ShioriTools).Assembly
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
             ?? "unknown";
         return new ServerVersionInfo("Shiori", version);
     }
