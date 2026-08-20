@@ -1,6 +1,8 @@
 using System.Net;
 using ModelContextProtocol.AspNetCore;
 using ModelContextProtocol.Server;
+using Shiori.Cli;
+using Shiori.Core.Logging;
 using Shiori.Core.Lsp;
 
 namespace Shiori.Cli.Server;
@@ -31,6 +33,7 @@ internal static class ShioriHttpServer
         var builder = WebApplication.CreateBuilder(options);
         builder.WebHost.ConfigureKestrel(server => server.Listen(IPAddress.Loopback, port));
         builder.Configuration["AllowedHosts"] = "localhost;127.0.0.1;[::1]";
+        builder.Logging.AddProvider(new FileLoggerProvider(InstallationLayout.GetDirectory("logs")));
         builder.Services.AddSingleton(serviceProvider =>
         {
             var logger = serviceProvider.GetRequiredService<ILogger<NativeEngineRegistry>>();
