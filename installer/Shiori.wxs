@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  AppVersion and SourceDirectory are supplied on the command line, e.g.:
-  wix build -arch x64 -d AppVersion=1.1.3 -d SourceDirectory=<publish dir> -out out.msi Shiori.wxs
+  AppVersion, SourceDirectory, and LicenseRtf are supplied on the command line, e.g.:
+  wix build -arch x64 -ext WixToolset.UI.wixext -d AppVersion=1.1.3 -d SourceDirectory=<publish dir> -d LicenseRtf=installer\License.rtf -out out.msi Shiori.wxs
 -->
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
   <Package Id="Shiori"
            Name="Shiori"
            Version="$(var.AppVersion)"
@@ -12,6 +13,15 @@
            Scope="perUser">
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of Shiori is already installed." />
+
+    <!--
+      AUTOSTART controls whether the per-user "run at logon" registry entry
+      (AutostartRegistry component, below) is installed. The AutostartDlg UI
+      page lets the user toggle it; the property defaults to enabled so a
+      silent/unattended install (msiexec /i ... /qn) still gets auto-start.
+      Advanced silent installs can opt out with AUTOSTART=0.
+    -->
+    <Property Id="AUTOSTART" Value="1" />
 
     <Icon Id="ShioriExeIcon" SourceFile="$(var.SourceDirectory)\bin\shiori.exe" />
     <Property Id="ARPPRODUCTICON" Value="ShioriExeIcon" />
@@ -62,6 +72,21 @@
     </Component>
 
     <!--
+      Per-user "run at logon" entry. Runs shiori.exe hidden (no console
+      window) via a PowerShell wrapper, matching the manual dev-machine
+      startup task this installer feature replaces. Only installed when
+      AUTOSTART = "1" (see AutostartDlg).
+    -->
+    <Component Id="AutostartRegistry" Directory="BINFOLDER" Guid="6e2df6a4-6a26-4f6a-9b7a-2c9f3a1f7c3a" Condition='AUTOSTART = "1"'>
+      <RegistryValue Root="HKCU"
+                      Key="Software\Microsoft\Windows\CurrentVersion\Run"
+                      Name="Shiori"
+                      Type="string"
+                      Value="powershell.exe -NoProfile -WindowStyle Hidden -Command &quot;Start-Process -FilePath '[BINFOLDER]shiori.exe' -ArgumentList 'serve' -WorkingDirectory '[BINFOLDER]' -WindowStyle Hidden&quot;"
+                      KeyPath="yes" />
+    </Component>
+
+    <!--
       Windows Installer expects every component installed under the user
       profile to key off an HKCU registry value rather than a file (ICE38).
       This marker component gives the product a compliant keypath so
@@ -80,6 +105,42 @@
       <ComponentRef Id="PreserveDataDirectory" />
       <ComponentRef Id="PathEnvironment" />
       <ComponentRef Id="RegistryKeyPath" />
+      <ComponentRef Id="AutostartRegistry" />
     </Feature>
+
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />
+
+    <ui:WixUI Id="WixUI_Minimal" />
+
+    <UI>
+      <Dialog Id="AutostartDlg" Width="370" Height="270" Title="[ProductName] Setup">
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15" Transparent="yes" NoPrefix="yes">
+          <Text Value="{\WixUI_Font_Title}Startup Options" />
+        </Control>
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="15" Transparent="yes" NoPrefix="yes">
+          <Text Value="Choose whether Shiori starts automatically." />
+        </Control>
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+
+        <Control Id="AutostartCheckBox" Type="CheckBox" X="25" Y="60" Width="320" Height="18"
+                 Property="AUTOSTART" CheckBoxValue="1"
+                 Text="Start Shiori automatically when I log on" />
+        <Control Id="AutostartNote" Type="Text" X="35" Y="80" Width="310" Height="30" Transparent="yes" NoPrefix="yes">
+          <Text Value="Runs the Shiori MCP server in the background at each logon (recommended). You can change this later by editing the registry Run entry, or by reinstalling with this option unchecked." />
+        </Control>
+
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)" />
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="!(loc.WixUINext)" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
+          <Publish Event="SpawnDialog" Value="CancelDlg" Condition="1" />
+        </Control>
+      </Dialog>
+
+      <Publish Dialog="WelcomeEulaDlg" Control="Next" Event="NewDialog" Value="AutostartDlg" Order="10" Condition="1" />
+      <Publish Dialog="AutostartDlg" Control="Back" Event="NewDialog" Value="WelcomeEulaDlg" Order="10" Condition="1" />
+      <Publish Dialog="AutostartDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" Order="10" Condition="1" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="AutostartDlg" Order="10" Condition="1" />
+    </UI>
   </Package>
 </Wix>
