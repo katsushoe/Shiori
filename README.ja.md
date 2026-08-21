@@ -10,7 +10,7 @@ Shioriは、AIコーディングエージェント向けの高速なローカル
 統合検索はGit情報を利用できる場合、追跡中および最近変更されたファイルへ
 限定的な順位加点を行います。
 
-製品バージョン: `1.1.4`
+製品バージョン: `1.2.0`
 
 ## はじめに
 
@@ -24,7 +24,7 @@ Shioriは、AIコーディングエージェント向けの高速なローカル
 ### Windowsインストーラ
 
 [最新リリース](https://github.com/katsushoe/Shiori/releases/latest)から
-`shiori-v1.1.4-win-x64-setup.msi`をダウンロードして実行します。
+`shiori-v1.2.0-win-x64-setup.msi`をダウンロードして実行します。
 **Add Shiori to the current user's PATH**を選択したまま進めてください。
 インストーラは自己完結型で、現在のユーザーにのみインストールされます。
 指定したインストールルートの下に`bin`、`config`、`logs`、`data`を作成し、
@@ -40,14 +40,14 @@ shiori doctor
 
 ### ZIPバイナリ
 
-最新リリースから`shiori-v1.1.4-win-x64.zip`と隣接するSHA-256ファイルを
+最新リリースから`shiori-v1.2.0-win-x64.zip`と隣接するSHA-256ファイルを
 ダウンロードします。チェックサムを確認して任意の恒久的なインストールルートへ
 展開し、その`bin`ディレクトリをユーザーの`PATH`へ追加してください。ZIPにも
 インストーラと同じ標準構成が含まれ、.NETを別途インストールする必要はありません。
 
 ```powershell
-$expected = (Get-Content .\shiori-v1.1.4-win-x64.zip.sha256).Split()[0]
-$actual = (Get-FileHash .\shiori-v1.1.4-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+$expected = (Get-Content .\shiori-v1.2.0-win-x64.zip.sha256).Split()[0]
+$actual = (Get-FileHash .\shiori-v1.2.0-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($actual -ne $expected) { throw "Checksum mismatch" }
 ```
 
@@ -65,7 +65,7 @@ cargo build --release --manifest-path .\native\shiori-engine\Cargo.toml
 dotnet restore .\Shiori.slnx
 dotnet build .\Shiori.slnx --configuration Release --no-restore
 dotnet test .\tests\Shiori.Core.Tests\Shiori.Core.Tests.csproj --configuration Release --no-build
-.\scripts\Publish-Windows.ps1 -Version 1.1.4
+.\scripts\Publish-Windows.ps1 -Version 1.2.0
 ```
 
 配布スクリプトはインストーラ、ZIP、チェックサムを`artifacts/`へ出力します。

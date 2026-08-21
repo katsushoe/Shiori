@@ -4,6 +4,8 @@ All notable changes to Shiori are documented in this file.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-21
+
 ### Added
 
 - Added bounded Git-aware ranking that favors tracked and recently changed
