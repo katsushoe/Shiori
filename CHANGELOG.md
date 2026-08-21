@@ -4,11 +4,22 @@ All notable changes to Shiori are documented in this file.
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-08-21
+
+### Added
+
+- Added English and Japanese CLI resources for help, diagnostics, and errors.
+- Added installer language selection and persisted the selected language in
+  `config/shiori.ini`.
+
 ### Changed
 
 - Replaced the Inno Setup Windows installer with a WiX Toolset MSI
   (`installer/Shiori.wxs`), keeping the same per-user install location,
   `bin`/`config`/`logs`/`data` layout, and PATH registration.
+- Changed `get_version` to return the four-part assembly version.
+- Updated the WiX build to accept the WiX Toolset v7 OSMF terms explicitly and
+  use UTF-8 for installer text.
 
 ## [1.1.3] - 2026-08-17
 

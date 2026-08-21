@@ -7,7 +7,15 @@ using Shiori.Core.Lsp;
 using Shiori.Core.Search;
 using Shiori.Native;
 
-return Run(args);
+try
+{
+    ApplicationCulture.Apply();
+    return Run(args);
+}
+catch (Exception exception) when (exception is InvalidDataException or IOException or UnauthorizedAccessException)
+{
+    return Fail(exception.Message);
+}
 
 static int Run(string[] arguments)
 {
@@ -33,7 +41,7 @@ static int Run(string[] arguments)
             "workspace" => RunWorkspace(arguments[1..]),
             "doctor" => DoctorRunner.Run(),
             "serve" => RunServer(arguments[1..]),
-            _ => Fail($"Unknown command: {arguments[0]}")
+            _ => Fail(CliText.Format("UnknownCommand", arguments[0]))
         };
     }
     catch (Exception exception)
@@ -44,11 +52,11 @@ static int Run(string[] arguments)
 
 static int RunAst(string[] arguments)
 {
-    if (arguments.Length == 0) return Fail("ast requires a Tree-sitter query pattern.");
+    if (arguments.Length == 0) return Fail(CliText.Get("AstQueryRequired"));
     var language = GetOption(arguments, "--language")
-        ?? throw new ArgumentException("--language is required.");
+        ?? throw new ArgumentException(CliText.Format("OptionRequired", "--language"));
     var workspace = GetOption(arguments, "--allow")
-        ?? throw new ArgumentException("--allow is required.");
+        ?? throw new ArgumentException(CliText.Format("OptionRequired", "--allow"));
     var limit = int.TryParse(GetOption(arguments, "--limit"), out var parsed) ? parsed : 20;
     using var engine = NativeShioriEngine.Open(workspace);
     var response = new AstSearchResponse(
@@ -65,9 +73,9 @@ static int RunNavigate(string[] arguments)
 {
     if (arguments.Length < 2
         || arguments[0] is not ("definition" or "references" or "implementations" or "callers" or "callees"))
-        return Fail("navigate requires definition, references, implementations, callers, or callees and a source-file path.");
+        return Fail(CliText.Get("NavigateRequired"));
     var workspace = GetOption(arguments, "--allow")
-        ?? throw new ArgumentException("--allow is required.");
+        ?? throw new ArgumentException(CliText.Format("OptionRequired", "--allow"));
     var line = int.TryParse(GetOption(arguments, "--line"), out var parsedLine) ? parsedLine : 0;
     var column = int.TryParse(GetOption(arguments, "--column"), out var parsedColumn) ? parsedColumn : 0;
     var limit = int.TryParse(GetOption(arguments, "--limit"), out var parsedLimit) ? parsedLimit : 20;
@@ -93,14 +101,14 @@ static int RunNavigate(string[] arguments)
 
 static int RunConfig(string[] arguments)
 {
-    if (arguments.Length == 0) return Fail("config requires claude or codex.");
+    if (arguments.Length == 0) return Fail(CliText.Get("ConfigTargetRequired"));
     var port = int.TryParse(GetOption(arguments, "--port"), out var parsed) ? parsed : 39473;
     var name = GetOption(arguments, "--name") ?? "shiori";
     var configuration = arguments[0] switch
     {
         "claude" => ClaudeCodeConfigGenerator.Generate(port, name),
         "codex" => CodexConfigGenerator.Generate(port, name),
-        _ => throw new ArgumentException($"Unknown config target: {arguments[0]}")
+        _ => throw new ArgumentException(CliText.Format("UnknownConfigTarget", arguments[0]))
     };
     Console.WriteLine(configuration);
     return 0;
@@ -108,9 +116,9 @@ static int RunConfig(string[] arguments)
 
 static int RunSearch(string[] arguments)
 {
-    if (arguments.Length == 0) return Fail("search requires a query.");
+    if (arguments.Length == 0) return Fail(CliText.Get("SearchQueryRequired"));
     var workspace = GetOption(arguments, "--allow")
-        ?? throw new ArgumentException("--allow is required.");
+        ?? throw new ArgumentException(CliText.Format("OptionRequired", "--allow"));
     var limit = int.TryParse(GetOption(arguments, "--limit"), out var parsed) ? parsed : 20;
     using var engine = NativeShioriEngine.Open(workspace);
     var response = UnifiedSearchService.SearchAsync(
@@ -125,9 +133,9 @@ static int RunSearch(string[] arguments)
 
 static int RunSymbol(string[] arguments)
 {
-    if (arguments.Length == 0) return Fail("symbol requires a query.");
+    if (arguments.Length == 0) return Fail(CliText.Get("SymbolQueryRequired"));
     var workspace = GetOption(arguments, "--allow")
-        ?? throw new ArgumentException("--allow is required.");
+        ?? throw new ArgumentException(CliText.Format("OptionRequired", "--allow"));
     var limit = int.TryParse(GetOption(arguments, "--limit"), out var parsed) ? parsed : 20;
     using var engine = NativeShioriEngine.Open(workspace);
     var response = new SearchSymbolsResponse(engine.SearchSymbols(
@@ -143,9 +151,9 @@ static int RunSymbol(string[] arguments)
 
 static int RunOutline(string[] arguments)
 {
-    if (arguments.Length == 0) return Fail("outline requires a source-file path.");
+    if (arguments.Length == 0) return Fail(CliText.Get("OutlinePathRequired"));
     var workspace = GetOption(arguments, "--allow")
-        ?? throw new ArgumentException("--allow is required.");
+        ?? throw new ArgumentException(CliText.Format("OptionRequired", "--allow"));
     using var engine = NativeShioriEngine.Open(workspace);
     var outline = engine.GetFileOutline(arguments[0]);
     Console.WriteLine(JsonSerializer.Serialize(outline, new JsonSerializerOptions
@@ -158,16 +166,16 @@ static int RunOutline(string[] arguments)
 
 static int RunWorkspace(string[] arguments)
 {
-    if (arguments.Length == 0) return Fail("workspace requires add, list, or remove.");
+    if (arguments.Length == 0) return Fail(CliText.Get("WorkspaceCommandRequired"));
     var registry = new WorkspaceRegistry();
     object response = arguments[0] switch
     {
         "add" when arguments.Length >= 2 => registry.Add(arguments[1]),
         "list" => new { workspaces = registry.List() },
         "remove" when arguments.Length >= 2 => registry.Remove(arguments[1]),
-        "add" => throw new ArgumentException("workspace add requires an absolute directory."),
-        "remove" => throw new ArgumentException("workspace remove requires a name, ID, or absolute directory."),
-        _ => throw new ArgumentException($"Unknown workspace command: {arguments[0]}")
+        "add" => throw new ArgumentException(CliText.Get("WorkspaceAddPathRequired")),
+        "remove" => throw new ArgumentException(CliText.Get("WorkspaceRemoveTargetRequired")),
+        _ => throw new ArgumentException(CliText.Format("UnknownWorkspaceCommand", arguments[0]))
     };
     Console.WriteLine(JsonSerializer.Serialize(response, new JsonSerializerOptions
     {
@@ -179,16 +187,16 @@ static int RunWorkspace(string[] arguments)
 
 static int RunIndex(string[] arguments)
 {
-    if (arguments.Length == 0) return Fail("index requires build, status, or rebuild.");
+    if (arguments.Length == 0) return Fail(CliText.Get("IndexCommandRequired"));
     var workspace = GetOption(arguments, "--allow")
-        ?? throw new ArgumentException("--allow is required.");
+        ?? throw new ArgumentException(CliText.Format("OptionRequired", "--allow"));
     using var engine = NativeShioriEngine.Open(workspace);
     var status = arguments[0] switch
     {
         "build" => engine.BuildIndex(),
         "status" => engine.GetIndexStatus(),
         "rebuild" => engine.RebuildIndex(),
-        _ => throw new ArgumentException($"Unknown index command: {arguments[0]}")
+        _ => throw new ArgumentException(CliText.Format("UnknownIndexCommand", arguments[0]))
     };
     Console.WriteLine(JsonSerializer.Serialize(status, new JsonSerializerOptions
     {
@@ -200,9 +208,9 @@ static int RunIndex(string[] arguments)
 
 static int RunGrep(string[] arguments)
 {
-    if (arguments.Length == 0) return Fail("grep requires a query.");
+    if (arguments.Length == 0) return Fail(CliText.Get("GrepQueryRequired"));
     var workspace = GetOption(arguments, "--allow")
-        ?? throw new ArgumentException("--allow is required.");
+        ?? throw new ArgumentException(CliText.Format("OptionRequired", "--allow"));
     var limit = int.TryParse(GetOption(arguments, "--limit"), out var parsedLimit) ? parsedLimit : 20;
     var context = int.TryParse(GetOption(arguments, "--context"), out var parsedContext) ? parsedContext : 0;
     using var engine = NativeShioriEngine.Open(workspace);
@@ -227,9 +235,9 @@ static int RunGrep(string[] arguments)
 
 static int RunFind(string[] arguments)
 {
-    if (arguments.Length == 0) return Fail("find requires a query.");
+    if (arguments.Length == 0) return Fail(CliText.Get("FindQueryRequired"));
     var workspace = GetOption(arguments, "--allow")
-        ?? throw new ArgumentException("--allow is required.");
+        ?? throw new ArgumentException(CliText.Format("OptionRequired", "--allow"));
     var limit = int.TryParse(GetOption(arguments, "--limit"), out var parsed) ? parsed : 20;
     using var engine = NativeShioriEngine.Open(workspace);
     var response = new { results = engine.SearchFiles(arguments[0], limit) };
@@ -262,32 +270,8 @@ static bool HasOption(string[] arguments, string option) =>
 
 static int Fail(string message)
 {
-    Console.Error.WriteLine($"error: {message}");
+    Console.Error.WriteLine(CliText.Format("Error", message));
     return 1;
 }
 
-static string Usage() => """
-    Usage:
-      shiori ast <tree-sitter-query> --language <language> --allow <directory>
-        [--path <path>] [--limit <1-100>]
-      shiori find <query> --allow <directory> [--limit <1-100>]
-      shiori search <query> --allow <directory> [--path <path>] [--limit <1-100>]
-      shiori grep <query> --allow <directory> [--path <path>] [--glob <glob>]
-        [--regex] [--case-sensitive] [--context <0-10>] [--limit <1-100>]
-      shiori index build --allow <directory>
-      shiori index status --allow <directory>
-      shiori index rebuild --allow <directory>
-      shiori navigate <definition|references|implementations|callers|callees> <file>
-        --line <one-based> --column <one-based>
-        --allow <directory> [--limit <1-100>]
-      shiori outline <source-file> --allow <directory>
-      shiori symbol <query> --allow <directory> [--kind <kind>] [--language <language>]
-        [--path <path>] [--limit <1-100>]
-      shiori workspace add <absolute-directory>
-      shiori workspace list
-      shiori workspace remove <name-or-id-or-absolute-directory>
-      shiori doctor
-      shiori config claude [--port <1-65535>] [--name <server-name>]
-      shiori config codex [--port <1-65535>] [--name <server-name>]
-      shiori serve [--port <1-65535>]
-    """;
+static string Usage() => CliText.Get("Usage");
