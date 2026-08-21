@@ -6,6 +6,8 @@ Shiori is a fast, local-first file search server for AI coding agents. Indexed
 code search and semantic navigation are available as secondary capabilities.
 The server exposes a single Streamable HTTP MCP endpoint and keeps independent
 SQLite indexes for each workspace.
+Unified search uses bounded Git-aware ranking for tracked and recently changed
+files when Git metadata is available.
 
 Product version: `1.1.4`.
 

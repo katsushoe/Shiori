@@ -5,13 +5,16 @@ namespace Shiori.Core.Search;
 /// <summary>Executes query plans across local search providers.</summary>
 public static class UnifiedSearchService
 {
+    private static readonly IGitMetadataProvider DefaultGitMetadataProvider = new GitMetadataProvider();
+
     /// <summary>Plans and executes a bounded unified search.</summary>
     public static async Task<UnifiedSearchResponse> SearchAsync(
         IShioriEngine engine,
         string query,
         string? path = null,
         int limit = 20,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IGitMetadataProvider? gitMetadataProvider = null)
     {
         ArgumentNullException.ThrowIfNull(engine);
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
@@ -33,10 +36,22 @@ public static class UnifiedSearchService
                 execution => execution.Provider.ToString().ToLowerInvariant(),
                 execution => execution.Error!,
                 StringComparer.Ordinal);
+        IReadOnlyDictionary<string, GitFileMetadata>? gitMetadata = null;
+        try
+        {
+            gitMetadata = (gitMetadataProvider ?? DefaultGitMetadataProvider).GetMetadata(
+                engine.GetWorkspaceInfo().Path,
+                executions.SelectMany(execution => execution.Results).Select(result => result.Path));
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+        }
+
         var results = SearchRanker.Rank(
             plan.SearchQuery,
             executions.SelectMany(execution => execution.Results),
-            limit);
+            limit,
+            gitMetadata);
         return new UnifiedSearchResponse(plan, results, errors);
     }
 
