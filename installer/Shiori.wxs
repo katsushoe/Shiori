@@ -10,6 +10,7 @@
            Version="$(var.AppVersion)"
            Manufacturer="Shiori contributors"
            UpgradeCode="9f1d00d3-d780-45ad-9c10-34c2e2e9edb4"
+           Codepage="65001"
            Scope="perUser">
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of Shiori is already installed." />
@@ -22,6 +23,7 @@
       Advanced silent installs can opt out with AUTOSTART=0.
     -->
     <Property Id="AUTOSTART" Value="1" />
+    <Property Id="SHIORI_LANGUAGE" Value="en-US" />
 
     <Icon Id="ShioriExeIcon" SourceFile="$(var.SourceDirectory)\bin\shiori.exe" />
     <Property Id="ARPPRODUCTICON" Value="ShioriExeIcon" />
@@ -59,6 +61,15 @@
     -->
     <Component Id="PreserveConfigDirectory" Directory="CONFIGFOLDER" Guid="fe1496ac-c6bd-48d2-aeb0-acc21f9ba80f">
       <CreateFolder />
+    </Component>
+    <Component Id="LanguageConfig" Directory="CONFIGFOLDER" Guid="0a2a3833-0196-4f9c-a2d2-919a75923c96">
+      <IniFile Id="WriteLanguageConfig"
+               Name="shiori.ini"
+               Directory="CONFIGFOLDER"
+               Section="general"
+               Key="language"
+               Value="[SHIORI_LANGUAGE]"
+               Action="addLine" />
     </Component>
     <Component Id="PreserveLogsDirectory" Directory="LOGSFOLDER" Guid="128795bb-ede7-443f-9f89-8750b9baca8d">
       <CreateFolder />
@@ -101,6 +112,7 @@
       <ComponentGroupRef Id="BinFiles" />
       <ComponentGroupRef Id="DocFiles" />
       <ComponentRef Id="PreserveConfigDirectory" />
+      <ComponentRef Id="LanguageConfig" />
       <ComponentRef Id="PreserveLogsDirectory" />
       <ComponentRef Id="PreserveDataDirectory" />
       <ComponentRef Id="PathEnvironment" />
@@ -113,6 +125,30 @@
     <ui:WixUI Id="WixUI_Minimal" />
 
     <UI>
+      <Dialog Id="LanguageDlg" Width="370" Height="270" Title="[ProductName] Setup">
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15" Transparent="yes" NoPrefix="yes">
+          <Text Value="{\WixUI_Font_Title}Language" />
+        </Control>
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="300" Height="15" Transparent="yes" NoPrefix="yes">
+          <Text Value="Choose the language Shiori will use." />
+        </Control>
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+
+        <Control Id="LanguageGroup" Type="RadioButtonGroup" X="25" Y="60" Width="320" Height="60" Property="SHIORI_LANGUAGE">
+          <RadioButtonGroup Property="SHIORI_LANGUAGE">
+            <RadioButton Value="en-US" X="0" Y="0" Width="300" Height="18" Text="English" />
+            <RadioButton Value="ja-JP" X="0" Y="25" Width="300" Height="18" Text="日本語" />
+          </RadioButtonGroup>
+        </Control>
+
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)" />
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="!(loc.WixUINext)" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
+          <Publish Event="SpawnDialog" Value="CancelDlg" Condition="1" />
+        </Control>
+      </Dialog>
+
       <Dialog Id="AutostartDlg" Width="370" Height="270" Title="[ProductName] Setup">
         <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15" Transparent="yes" NoPrefix="yes">
           <Text Value="{\WixUI_Font_Title}Startup Options" />
@@ -137,8 +173,10 @@
         </Control>
       </Dialog>
 
-      <Publish Dialog="WelcomeEulaDlg" Control="Next" Event="NewDialog" Value="AutostartDlg" Order="10" Condition="1" />
-      <Publish Dialog="AutostartDlg" Control="Back" Event="NewDialog" Value="WelcomeEulaDlg" Order="10" Condition="1" />
+      <Publish Dialog="WelcomeEulaDlg" Control="Next" Event="NewDialog" Value="LanguageDlg" Order="10" Condition="1" />
+      <Publish Dialog="LanguageDlg" Control="Back" Event="NewDialog" Value="WelcomeEulaDlg" Order="10" Condition="1" />
+      <Publish Dialog="LanguageDlg" Control="Next" Event="NewDialog" Value="AutostartDlg" Order="10" Condition="1" />
+      <Publish Dialog="AutostartDlg" Control="Back" Event="NewDialog" Value="LanguageDlg" Order="10" Condition="1" />
       <Publish Dialog="AutostartDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" Order="10" Condition="1" />
       <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="AutostartDlg" Order="10" Condition="1" />
     </UI>

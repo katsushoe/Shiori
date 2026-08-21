@@ -24,6 +24,7 @@ if ($null -eq $wix) {
 }
 
 & $wix.Source build `
+    -acceptEula wix7 `
     -arch x64 `
     -ext WixToolset.UI.wixext `
     -d "AppVersion=$Version" `

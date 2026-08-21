@@ -22,6 +22,7 @@ internal static class DoctorRunner
         AddNativeChecks(checks);
         AddLspCheck(checks);
         AddDirectoryChecks(checks);
+        AddSettingsCheck(checks);
         AddMcpChecks(checks);
         var status = checks.Any(check => check.Status == "error")
             ? "error"
@@ -125,6 +126,19 @@ internal static class DoctorRunner
             "allowed_workspaces",
             valid ? "ok" : "error",
             valid ? $"{workspaces.Length} configured" : "contains an unavailable or relative directory"));
+    }
+
+    private static void AddSettingsCheck(List<DoctorCheck> checks)
+    {
+        try
+        {
+            var settings = ApplicationSettings.Load();
+            checks.Add(new DoctorCheck("language", "ok", settings.Language));
+        }
+        catch (InvalidDataException exception)
+        {
+            checks.Add(new DoctorCheck("language", "error", exception.Message));
+        }
     }
 
     private sealed record DoctorReport(string Status, IReadOnlyList<DoctorCheck> Checks);

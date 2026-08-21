@@ -2,8 +2,9 @@
 
 [English](CONFIG.md) | [日本語](CONFIG.ja.md)
 
-This document is the reference for Shiori runtime configuration. Shiori uses
-environment variables; it does not currently read a product-specific settings file.
+This document is the reference for Shiori runtime configuration. Shiori reads
+non-secret product settings from `config\shiori.ini` and operational or secret
+settings from environment variables.
 
 ## Configuration Directory
 
@@ -13,12 +14,33 @@ default. Set `SHIORI_DATA_HOME` to replace that directory.
 
 ## File Generation
 
+- The Windows installer creates `config\shiori.ini` with the language selected
+  during setup. The default for silent installation is `en-US`; set the public
+  MSI property `SHIORI_LANGUAGE=ja-JP` to select Japanese.
 - `workspaces.json` is created and updated by `shiori workspace` commands.
 - `indexes\<workspace-id>\shiori.db` is created by index operations.
 - Claude and Codex configuration snippets are printed by `shiori config`; the
   user decides where to save or merge them.
 
 ## Main Settings
+
+### `config\shiori.ini`
+
+```ini
+[general]
+language=en-US
+```
+
+| Setting | Required | Type | Default | Constraint |
+| :--- | :--- | :--- | :--- | :--- |
+| `general.language` | No | Locale identifier | `en-US` | `en-US` or `ja-JP` |
+
+If the file is absent, Shiori uses `en-US`. An unsupported value is reported as
+an error by `shiori doctor`. The configured language is applied when the process
+starts and localizes CLI help and user-facing command errors. Command names,
+JSON field names, logs, and MCP protocol values remain language-neutral.
+
+### Environment variables
 
 | Setting | Required | Type | Default | Constraint |
 | :--- | :--- | :--- | :--- | :--- |
