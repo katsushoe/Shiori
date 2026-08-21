@@ -53,6 +53,48 @@ public sealed class SearchRankerTests
         Assert.Equal(3, SearchRanker.Rank("value", results, 3).Count);
     }
 
+    [Fact]
+    public void Rank_applies_bounded_tracked_and_recent_change_boosts()
+    {
+        var now = new DateTimeOffset(2026, 8, 21, 0, 0, 0, TimeSpan.Zero);
+        var results = new[]
+        {
+            Result("text", "text", "src/old.cs", 1),
+            Result("text", "text", "src/recent.cs", 1),
+            Result("text", "text", "src/untracked.cs", 1),
+        };
+        var metadata = new Dictionary<string, GitFileMetadata>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["src/old.cs"] = new(true, now.AddDays(-60)),
+            ["src/recent.cs"] = new(true, now.AddDays(-2)),
+            ["src/untracked.cs"] = new(false, now),
+        };
+
+        var ranked = SearchRanker.Rank("value", results, 10, metadata, now);
+
+        Assert.Equal(["src/recent.cs", "src/old.cs", "src/untracked.cs"], ranked.Select(result => result.Path));
+        Assert.Equal([0.54, 0.515, 0.5], ranked.Select(result => result.Score));
+    }
+
+    [Fact]
+    public void Rank_keeps_match_quality_ahead_of_git_boosts()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var results = new[]
+        {
+            Result("file", "file", "src/SaveAccount.cs", null),
+            Result("file", "file", "src/SaveAccountHelper.cs", null),
+        };
+        var metadata = new Dictionary<string, GitFileMetadata>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["src/SaveAccountHelper.cs"] = new(true, now),
+        };
+
+        var ranked = SearchRanker.Rank("SaveAccount", results, 10, metadata, now);
+
+        Assert.Equal("src/SaveAccount.cs", ranked[0].Path);
+    }
+
     private static UnifiedSearchResult Result(
         string type,
         string provider,

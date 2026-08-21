@@ -8,6 +8,19 @@ namespace Shiori.Core.Tests;
 public sealed class UnifiedSearchServiceTests
 {
     [Fact]
+    public async Task SearchAsync_falls_back_when_git_metadata_is_unavailable()
+    {
+        using var engine = new FakeEngine();
+
+        var response = await UnifiedSearchService.SearchAsync(
+            engine,
+            "SaveAccount",
+            gitMetadataProvider: new ThrowingGitMetadataProvider());
+
+        Assert.NotEmpty(response.Results);
+    }
+
+    [Fact]
     public async Task SearchAsync_executes_planned_providers_and_bounds_combined_results()
     {
         using var engine = new FakeEngine();
@@ -57,6 +70,13 @@ public sealed class UnifiedSearchServiceTests
 
         Assert.Contains("\"intent\":\"symbol\"", json);
         Assert.Contains("\"providers\":[\"symbol\",\"file\",\"text\"]", json);
+    }
+
+    private sealed class ThrowingGitMetadataProvider : IGitMetadataProvider
+    {
+        public IReadOnlyDictionary<string, GitFileMetadata> GetMetadata(
+            string workspaceRoot,
+            IEnumerable<string> relativePaths) => throw new IOException("git unavailable");
     }
 
     private sealed class FakeEngine : IShioriEngine
@@ -113,7 +133,12 @@ public sealed class UnifiedSearchServiceTests
             return [new SearchResult("text", "Service.cs", 10, "SaveAccount();", 5)];
         }
 
-        public WorkspaceInfo GetWorkspaceInfo() => throw new NotSupportedException();
+        public WorkspaceInfo GetWorkspaceInfo() => new(
+            "test",
+            AppContext.BaseDirectory,
+            "test",
+            Path.Combine(AppContext.BaseDirectory, "test.db"),
+            1);
         public IndexStatus GetIndexStatus() => throw new NotSupportedException();
         public IndexStatus BuildIndex() => throw new NotSupportedException();
         public IndexStatus RebuildIndex() => throw new NotSupportedException();

@@ -7,7 +7,9 @@ public static class SearchRanker
     public static IReadOnlyList<UnifiedSearchResult> Rank(
         string query,
         IEnumerable<UnifiedSearchResult> results,
-        int limit)
+        int limit,
+        IReadOnlyDictionary<string, GitFileMetadata>? gitMetadata = null,
+        DateTimeOffset? now = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
         ArgumentNullException.ThrowIfNull(results);
@@ -15,7 +17,7 @@ public static class SearchRanker
         ArgumentOutOfRangeException.ThrowIfGreaterThan(limit, 100);
 
         return results
-            .Select(result => result with { Score = Score(query, result) })
+            .Select(result => result with { Score = Score(query, result, gitMetadata, now ?? DateTimeOffset.UtcNow) })
             .GroupBy(DeduplicationKey, StringComparer.OrdinalIgnoreCase)
             .Select(Merge)
             .OrderByDescending(result => result.Score)
@@ -26,7 +28,30 @@ public static class SearchRanker
             .ToArray();
     }
 
-    private static double Score(string query, UnifiedSearchResult result)
+    private static double Score(
+        string query,
+        UnifiedSearchResult result,
+        IReadOnlyDictionary<string, GitFileMetadata>? gitMetadata,
+        DateTimeOffset now)
+    {
+        var baseScore = BaseScore(query, result);
+        if (gitMetadata is null || !gitMetadata.TryGetValue(NormalizePath(result.Path), out var metadata) || !metadata.IsTracked)
+        {
+            return baseScore;
+        }
+
+        var boost = 0.015;
+        if (metadata.LastWriteTimeUtc is { } changed)
+        {
+            var age = now - changed;
+            boost += age <= TimeSpan.FromDays(7) ? 0.025
+                : age <= TimeSpan.FromDays(30) ? 0.0125
+                : 0;
+        }
+        return Math.Min(1, baseScore + boost);
+    }
+
+    private static double BaseScore(string query, UnifiedSearchResult result)
     {
         if (result.Type == "symbol")
         {
