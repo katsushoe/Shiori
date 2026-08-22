@@ -16,10 +16,8 @@
   <data name="IndexCommandRequired" xml:space="preserve"><value>index requires build, status, or rebuild.</value></data>
   <data name="UnknownIndexCommand" xml:space="preserve"><value>Unknown index command: {0}</value></data>
   <data name="FindQueryRequired" xml:space="preserve"><value>find requires a query.</value></data>
-  <data name="IndexCounting" xml:space="preserve"><value>Checking target directories...</value></data>
-  <data name="IndexDirectoryCount" xml:space="preserve"><value>Target directories: {0}</value></data>
-  <data name="IndexProgress" xml:space="preserve"><value>Indexing: {0}/{1} ({2}%)  {3}</value></data>
-  <data name="IndexComplete" xml:space="preserve"><value>Complete: {0}/{1} (100%)  Files: {2:N0}  Elapsed: {3:c}</value></data>
+  <data name="IndexStart" xml:space="preserve"><value>Creating index: {0}</value></data>
+  <data name="IndexProgress" xml:space="preserve"><value>{0}% {1}</value></data>
   <data name="Usage" xml:space="preserve"><value>Usage:
     shiori version
     shiori find &lt;query&gt; [--allow &lt;directory&gt; ...] [--limit &lt;1-100&gt;]

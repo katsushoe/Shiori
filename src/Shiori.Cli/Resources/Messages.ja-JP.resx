@@ -16,10 +16,8 @@
   <data name="IndexCommandRequired" xml:space="preserve"><value>indexにはbuild、status、rebuildのいずれかが必要です。</value></data>
   <data name="UnknownIndexCommand" xml:space="preserve"><value>不明なindexコマンドです: {0}</value></data>
   <data name="FindQueryRequired" xml:space="preserve"><value>findにはクエリが必要です。</value></data>
-  <data name="IndexCounting" xml:space="preserve"><value>対象ディレクトリを確認中...</value></data>
-  <data name="IndexDirectoryCount" xml:space="preserve"><value>対象ディレクトリ: {0}</value></data>
-  <data name="IndexProgress" xml:space="preserve"><value>インデックス作成中: {0}/{1} ({2}%)  {3}</value></data>
-  <data name="IndexComplete" xml:space="preserve"><value>完了: {0}/{1} (100%)  ファイル: {2:N0}  経過時間: {3:c}</value></data>
+  <data name="IndexStart" xml:space="preserve"><value>インデクスを作成します：{0}</value></data>
+  <data name="IndexProgress" xml:space="preserve"><value>{0}% {1}</value></data>
   <data name="Usage" xml:space="preserve"><value>使用方法:
     shiori version
     shiori find &lt;クエリ&gt; [--allow &lt;ディレクトリ&gt; ...] [--limit &lt;1-100&gt;]
