@@ -4,6 +4,13 @@ All notable changes to Shiori are documented in this file.
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-08-22
+
+### Fixed
+
+- Allowed the MCP server to start with no registered workspaces while keeping
+  unregistered workspace access denied.
+
 ## [2.1.0] - 2026-08-22
 
 ### Added
