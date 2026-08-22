@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for v1.1.
+Superseded by [ADR 0003](0003-file-search-only-index.md) in v2.0.0.
 
 ## Context
 

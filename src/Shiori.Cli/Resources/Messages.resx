@@ -6,38 +6,25 @@
   <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
   <data name="Error" xml:space="preserve"><value>error: {0}</value></data>
   <data name="UnknownCommand" xml:space="preserve"><value>Unknown command: {0}</value></data>
-  <data name="AstQueryRequired" xml:space="preserve"><value>ast requires a Tree-sitter query pattern.</value></data>
   <data name="OptionRequired" xml:space="preserve"><value>{0} is required.</value></data>
-  <data name="NavigateRequired" xml:space="preserve"><value>navigate requires definition, references, implementations, callers, or callees and a source-file path.</value></data>
   <data name="ConfigTargetRequired" xml:space="preserve"><value>config requires claude or codex.</value></data>
   <data name="UnknownConfigTarget" xml:space="preserve"><value>Unknown config target: {0}</value></data>
-  <data name="SearchQueryRequired" xml:space="preserve"><value>search requires a query.</value></data>
-  <data name="SymbolQueryRequired" xml:space="preserve"><value>symbol requires a query.</value></data>
-  <data name="OutlinePathRequired" xml:space="preserve"><value>outline requires a source-file path.</value></data>
   <data name="WorkspaceCommandRequired" xml:space="preserve"><value>workspace requires add, list, or remove.</value></data>
   <data name="WorkspaceAddPathRequired" xml:space="preserve"><value>workspace add requires an absolute directory.</value></data>
   <data name="WorkspaceRemoveTargetRequired" xml:space="preserve"><value>workspace remove requires a name, ID, or absolute directory.</value></data>
   <data name="UnknownWorkspaceCommand" xml:space="preserve"><value>Unknown workspace command: {0}</value></data>
   <data name="IndexCommandRequired" xml:space="preserve"><value>index requires build, status, or rebuild.</value></data>
   <data name="UnknownIndexCommand" xml:space="preserve"><value>Unknown index command: {0}</value></data>
-  <data name="GrepQueryRequired" xml:space="preserve"><value>grep requires a query.</value></data>
   <data name="FindQueryRequired" xml:space="preserve"><value>find requires a query.</value></data>
+  <data name="IndexCounting" xml:space="preserve"><value>Checking target directories...</value></data>
+  <data name="IndexDirectoryCount" xml:space="preserve"><value>Target directories: {0}</value></data>
+  <data name="IndexProgress" xml:space="preserve"><value>Indexing: {0}/{1} ({2}%)  {3}</value></data>
+  <data name="IndexComplete" xml:space="preserve"><value>Complete: {0}/{1} (100%)  Files: {2:N0}  Elapsed: {3:c}</value></data>
   <data name="Usage" xml:space="preserve"><value>Usage:
-  shiori ast &lt;tree-sitter-query&gt; --language &lt;language&gt; --allow &lt;directory&gt;
-    [--path &lt;path&gt;] [--limit &lt;1-100&gt;]
   shiori find &lt;query&gt; --allow &lt;directory&gt; [--limit &lt;1-100&gt;]
-  shiori search &lt;query&gt; --allow &lt;directory&gt; [--path &lt;path&gt;] [--limit &lt;1-100&gt;]
-  shiori grep &lt;query&gt; --allow &lt;directory&gt; [--path &lt;path&gt;] [--glob &lt;glob&gt;]
-    [--regex] [--case-sensitive] [--context &lt;0-10&gt;] [--limit &lt;1-100&gt;]
   shiori index build --allow &lt;directory&gt;
   shiori index status --allow &lt;directory&gt;
   shiori index rebuild --allow &lt;directory&gt;
-  shiori navigate &lt;definition|references|implementations|callers|callees&gt; &lt;file&gt;
-    --line &lt;one-based&gt; --column &lt;one-based&gt;
-    --allow &lt;directory&gt; [--limit &lt;1-100&gt;]
-  shiori outline &lt;source-file&gt; --allow &lt;directory&gt;
-  shiori symbol &lt;query&gt; --allow &lt;directory&gt; [--kind &lt;kind&gt;] [--language &lt;language&gt;]
-    [--path &lt;path&gt;] [--limit &lt;1-100&gt;]
   shiori workspace add &lt;absolute-directory&gt;
   shiori workspace list
   shiori workspace remove &lt;name-or-id-or-absolute-directory&gt;

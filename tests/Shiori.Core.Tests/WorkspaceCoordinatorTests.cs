@@ -36,21 +36,6 @@ public sealed class WorkspaceCoordinatorTests
         Assert.Equal("search failed", error.Message);
     }
 
-    [Fact]
-    public async Task UpdateIndexesAsync_AllWorkspaces_WaitsForEveryCompletedStatus()
-    {
-        var first = CreateEngine("first", "First", "First.cs");
-        var second = CreateEngine("second", "Second", "Second.cs");
-        var coordinator = new WorkspaceCoordinator(new FakeProvider(first, second));
-
-        var response = await coordinator.UpdateIndexesAsync(null, false, CancellationToken.None);
-
-        Assert.Empty(response.Errors);
-        Assert.Equal(2, response.Workspaces.Count);
-        Assert.Equal(1, first.Builds);
-        Assert.Equal(1, second.Builds);
-    }
-
     private static FakeEngine CreateEngine(
         string id,
         string name,
@@ -89,22 +74,13 @@ public sealed class WorkspaceCoordinatorTests
         string resultPath,
         bool failSearch) : IShioriEngine
     {
-        private int _builds;
-
-        public uint AbiVersion => 2;
+        public uint AbiVersion => 3;
         public WorkspaceInfo Info { get; } = info;
-        public int Builds => _builds;
 
         public WorkspaceInfo GetWorkspaceInfo() => Info;
         public IndexStatus GetIndexStatus() => Status();
-
-        public IndexStatus BuildIndex()
-        {
-            Interlocked.Increment(ref _builds);
-            return Status();
-        }
-
-        public IndexStatus RebuildIndex() => BuildIndex();
+        public ulong CountIndexDirectories() => 1;
+        public IndexStatus BuildIndex(ulong totalDirectories, Action<IndexProgress>? progress = null) => Status();
 
         public IReadOnlyList<SearchResult> SearchFiles(string query, int limit = 20)
         {
@@ -112,21 +88,9 @@ public sealed class WorkspaceCoordinatorTests
             return [new SearchResult("file", resultPath, null, null)];
         }
 
-        public IReadOnlyList<SymbolSearchResult> SearchSymbols(
-            string query, string? kind = null, string? language = null,
-            string? path = null, int limit = 20) => [];
-
-        public IReadOnlyList<AstSearchResult> SearchAst(
-            string language, string pattern, string? path = null, int limit = 20) => [];
-
-        public IReadOnlyList<SearchResult> SearchText(
-            string query, string? path = null, string? glob = null, bool regex = false,
-            bool caseSensitive = false, int contextLines = 0, int limit = 20) => [];
-
-        public FileOutline GetFileOutline(string path) => throw new NotSupportedException();
         public void Dispose() { }
 
         private IndexStatus Status() => new(
-            Info.Id, "ready", 1, 0, 1, null, null, null);
+            Info.Id, "ready", 1, 1, null, null);
     }
 }

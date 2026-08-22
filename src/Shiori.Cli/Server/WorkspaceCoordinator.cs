@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-using System.Diagnostics;
 using Shiori.Core.Engine;
 
 namespace Shiori.Cli.Server;
@@ -9,8 +7,6 @@ public sealed class WorkspaceCoordinator
 {
     private const int MaximumConcurrency = 8;
     private readonly IWorkspaceEngineProvider _engines;
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _updateGates =
-        new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Creates a coordinator over the configured workspace provider.</summary>
     public WorkspaceCoordinator(IWorkspaceEngineProvider engines)
@@ -52,25 +48,6 @@ public sealed class WorkspaceCoordinator
         return new WorkspaceSearchFilesResponse(results, errors);
     }
 
-    /// <summary>Updates selected indexes concurrently and returns after all have completed.</summary>
-    public async Task<UpdateIndexesResponse> UpdateIndexesAsync(
-        IReadOnlyList<string>? workspaces,
-        bool force,
-        CancellationToken cancellationToken)
-    {
-        var stopwatch = Stopwatch.StartNew();
-        var paths = _engines.ResolveWorkspacePaths(workspaces);
-        using var concurrency = CreateConcurrencyGate(paths.Count);
-        var updates = paths.Select(path => UpdateWorkspaceAsync(
-            path, force, concurrency, cancellationToken));
-        var responses = await Task.WhenAll(updates).ConfigureAwait(false);
-        stopwatch.Stop();
-        return new UpdateIndexesResponse(
-            stopwatch.ElapsedMilliseconds,
-            responses.Where(response => response.Update is not null).Select(response => response.Update!).ToArray(),
-            responses.Where(response => response.Error is not null).Select(response => response.Error!).ToArray());
-    }
-
     private async Task<SearchWorkspaceResponse> SearchWorkspaceAsync(
         string workspace,
         string query,
@@ -101,42 +78,6 @@ public sealed class WorkspaceCoordinator
         }
     }
 
-    private async Task<UpdateWorkspaceResponse> UpdateWorkspaceAsync(
-        string workspace,
-        bool force,
-        SemaphoreSlim concurrency,
-        CancellationToken cancellationToken)
-    {
-        var updateGate = _updateGates.GetOrAdd(workspace, static _ => new SemaphoreSlim(1, 1));
-        await concurrency.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            await updateGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try
-            {
-                return await Task.Run(() =>
-                {
-                    var engine = _engines.GetEngine(workspace);
-                    var info = engine.GetWorkspaceInfo();
-                    var status = force ? engine.RebuildIndex() : engine.BuildIndex();
-                    return new UpdateWorkspaceResponse(new WorkspaceIndexUpdate(info, status), null);
-                }, cancellationToken).ConfigureAwait(false);
-            }
-            finally
-            {
-                updateGate.Release();
-            }
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            return new UpdateWorkspaceResponse(null, new WorkspaceOperationError(workspace, exception.Message));
-        }
-        finally
-        {
-            concurrency.Release();
-        }
-    }
-
     private static SemaphoreSlim CreateConcurrencyGate(int workspaceCount) =>
         new(Math.Max(1, Math.Min(workspaceCount, Math.Min(Environment.ProcessorCount, MaximumConcurrency))));
 
@@ -151,9 +92,5 @@ public sealed class WorkspaceCoordinator
 
     private sealed record SearchWorkspaceResponse(
         IReadOnlyList<WorkspaceSearchResult> Results,
-        WorkspaceOperationError? Error);
-
-    private sealed record UpdateWorkspaceResponse(
-        WorkspaceIndexUpdate? Update,
         WorkspaceOperationError? Error);
 }

@@ -40,13 +40,10 @@ truth; credentials and authenticated feed URLs must not be committed.
 
 | Package | Version | Purpose | Update policy |
 | :--- | :--- | :--- | :--- |
-| `globset` | `0.4.20` | Glob matching | Update with exclusion tests |
 | `ignore` | `0.4.33` | Gitignore-aware traversal | Update with indexing tests |
-| `rusqlite` | `0.40.2` | Bundled SQLite and FTS5 | Verify schema and native packaging |
+| `rusqlite` | `0.40.2` | Bundled SQLite file index | Verify schema and native packaging |
 | `serde` / `serde_json` | `1.0.229` / `1.0.151` | ABI JSON serialization | Preserve ABI compatibility |
-| `sha2` | `0.11.0` | File-content hashing | Update with incremental-index tests |
-| `tree-sitter` | `0.26.12` | Syntax-tree runtime | Update parsers as one tested set |
-| `tree-sitter-*` language crates | See `Cargo.toml` | Language parsers | Verify every supported language |
+| `sha2` | `0.11.0` | Stable workspace identifiers | Update with workspace-ID tests |
 
 # Transitive Packages
 
@@ -82,7 +79,7 @@ truth; credentials and authenticated feed URLs must not be committed.
 Cargo's complete resolved transitive dependency list and checksums are recorded
 in the tracked `native/shiori-engine/Cargo.lock`; `cargo tree` provides the
 direct-origin hierarchy. The lock file is kept as the detailed list because the
-same crate may resolve through several parser and platform dependency paths.
+same crate may resolve through several platform dependency paths.
 
 Do not add a transitive dependency directly unless Shiori uses its public API
 or must pin it for a documented compatibility or security reason.
@@ -91,7 +88,7 @@ or must pin it for a documented compatibility or security reason.
 
 Update direct dependencies in their manifest, regenerate the relevant lock or
 assets files, review licenses and security advisories, then run Rust and .NET
-tests. MCP, SQLite, Tree-sitter, and test-runner updates require focused
+tests. MCP, SQLite, and test-runner updates require focused
 compatibility checks. Keep `README.md`, `CONFIG.md`, and specifications aligned
 when a dependency changes an external capability.
 

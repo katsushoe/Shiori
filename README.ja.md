@@ -3,14 +3,12 @@
 [English](README.md) | [日本語](README.ja.md)
 
 Shioriは、AIコーディングエージェント向けの高速なローカルファースト・
-ファイル検索サーバーです。インデックス済みコード検索とセマンティック
-ナビゲーションは副次機能として利用できます。単一のStreamable HTTP MCP
+ファイル検索サーバーです。ファイル本文を開かず、ファイル名、パス、
+メタデータだけを索引化します。単一のStreamable HTTP MCP
 エンドポイントを公開し、ワークスペースごとに独立したSQLiteインデックスを
 保持します。
-統合検索はGit情報を利用できる場合、追跡中および最近変更されたファイルへ
-限定的な順位加点を行います。
 
-製品バージョン: `1.2.0`
+製品バージョン: `2.0.0`
 
 ## はじめに
 
@@ -24,7 +22,7 @@ Shioriは、AIコーディングエージェント向けの高速なローカル
 ### Windowsインストーラ
 
 [最新リリース](https://github.com/katsushoe/Shiori/releases/latest)から
-`shiori-v1.2.0-win-x64-setup.msi`をダウンロードして実行します。
+`shiori-v2.0.0-win-x64-setup.msi`をダウンロードして実行します。
 **Add Shiori to the current user's PATH**を選択したまま進めてください。
 インストーラは自己完結型で、現在のユーザーにのみインストールされます。
 指定したインストールルートの下に`bin`、`config`、`logs`、`data`を作成し、
@@ -32,7 +30,6 @@ Shioriは、AIコーディングエージェント向けの高速なローカル
 アプリ」を使用します。アンインストール後も設定、ログ、データは保持されます。
 セットアップでアプリケーション言語を選択し、その値を`config\shiori.ini`へ
 保存します。インストール後は新しいターミナルを開いてください。
-ripgrep 15.2.0も同梱されるため、本文検索に別途インストールは不要です。
 
 ```powershell
 shiori doctor
@@ -40,14 +37,14 @@ shiori doctor
 
 ### ZIPバイナリ
 
-最新リリースから`shiori-v1.2.0-win-x64.zip`と隣接するSHA-256ファイルを
+最新リリースから`shiori-v2.0.0-win-x64.zip`と隣接するSHA-256ファイルを
 ダウンロードします。チェックサムを確認して任意の恒久的なインストールルートへ
 展開し、その`bin`ディレクトリをユーザーの`PATH`へ追加してください。ZIPにも
 インストーラと同じ標準構成が含まれ、.NETを別途インストールする必要はありません。
 
 ```powershell
-$expected = (Get-Content .\shiori-v1.2.0-win-x64.zip.sha256).Split()[0]
-$actual = (Get-FileHash .\shiori-v1.2.0-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+$expected = (Get-Content .\shiori-v2.0.0-win-x64.zip.sha256).Split()[0]
+$actual = (Get-FileHash .\shiori-v2.0.0-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($actual -ne $expected) { throw "Checksum mismatch" }
 ```
 
@@ -65,7 +62,7 @@ cargo build --release --manifest-path .\native\shiori-engine\Cargo.toml
 dotnet restore .\Shiori.slnx
 dotnet build .\Shiori.slnx --configuration Release --no-restore
 dotnet test .\tests\Shiori.Core.Tests\Shiori.Core.Tests.csproj --configuration Release --no-build
-.\scripts\Publish-Windows.ps1 -Version 1.2.0
+.\scripts\Publish-Windows.ps1 -Version 2.0.0
 ```
 
 配布スクリプトはインストーラ、ZIP、チェックサムを`artifacts/`へ出力します。
@@ -98,9 +95,8 @@ shiori index build --allow F:\Projects\ProjectB
 shiori index status --allow F:\Projects\ProjectA
 ```
 
-2回目以降の`index build`は差分更新になります。MCPクライアントでは
-`update_indexes`を使って選択したワークスペース、または許可された全
-ワークスペースを更新できます。応答は全更新の完了後に返ります。
+インデックス作成前に対象ディレクトリ数を数え、作成中はディレクトリ単位の
+進捗をコンソールへ表示します。更新はMCPではなくCLIから明示的に実行します。
 
 ### 起動と接続
 

@@ -14,7 +14,7 @@ public static class NativeAbiStatus
     /// <summary>Gets the loaded native engine ABI version.</summary>
     public static uint GetAbiVersion() => NativeAbi.GetAbiVersion();
 
-    /// <summary>Runs native engine, SQLite, and ripgrep diagnostics.</summary>
+    /// <summary>Runs native engine and SQLite diagnostics.</summary>
     public static NativeDiagnostics GetDiagnostics()
     {
         var status = NativeAbi.GetDiagnostics(out var result, out var error);

@@ -6,38 +6,25 @@
   <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
   <data name="Error" xml:space="preserve"><value>エラー: {0}</value></data>
   <data name="UnknownCommand" xml:space="preserve"><value>不明なコマンドです: {0}</value></data>
-  <data name="AstQueryRequired" xml:space="preserve"><value>astにはTree-sitterクエリパターンが必要です。</value></data>
   <data name="OptionRequired" xml:space="preserve"><value>{0}は必須です。</value></data>
-  <data name="NavigateRequired" xml:space="preserve"><value>navigateにはdefinition、references、implementations、callers、calleesのいずれかとソースファイルパスが必要です。</value></data>
   <data name="ConfigTargetRequired" xml:space="preserve"><value>configにはclaudeまたはcodexが必要です。</value></data>
   <data name="UnknownConfigTarget" xml:space="preserve"><value>不明なconfig対象です: {0}</value></data>
-  <data name="SearchQueryRequired" xml:space="preserve"><value>searchにはクエリが必要です。</value></data>
-  <data name="SymbolQueryRequired" xml:space="preserve"><value>symbolにはクエリが必要です。</value></data>
-  <data name="OutlinePathRequired" xml:space="preserve"><value>outlineにはソースファイルパスが必要です。</value></data>
   <data name="WorkspaceCommandRequired" xml:space="preserve"><value>workspaceにはadd、list、removeのいずれかが必要です。</value></data>
   <data name="WorkspaceAddPathRequired" xml:space="preserve"><value>workspace addには絶対ディレクトリパスが必要です。</value></data>
   <data name="WorkspaceRemoveTargetRequired" xml:space="preserve"><value>workspace removeには名前、ID、絶対ディレクトリパスのいずれかが必要です。</value></data>
   <data name="UnknownWorkspaceCommand" xml:space="preserve"><value>不明なworkspaceコマンドです: {0}</value></data>
   <data name="IndexCommandRequired" xml:space="preserve"><value>indexにはbuild、status、rebuildのいずれかが必要です。</value></data>
   <data name="UnknownIndexCommand" xml:space="preserve"><value>不明なindexコマンドです: {0}</value></data>
-  <data name="GrepQueryRequired" xml:space="preserve"><value>grepにはクエリが必要です。</value></data>
   <data name="FindQueryRequired" xml:space="preserve"><value>findにはクエリが必要です。</value></data>
+  <data name="IndexCounting" xml:space="preserve"><value>対象ディレクトリを確認中...</value></data>
+  <data name="IndexDirectoryCount" xml:space="preserve"><value>対象ディレクトリ: {0}</value></data>
+  <data name="IndexProgress" xml:space="preserve"><value>インデックス作成中: {0}/{1} ({2}%)  {3}</value></data>
+  <data name="IndexComplete" xml:space="preserve"><value>完了: {0}/{1} (100%)  ファイル: {2:N0}  経過時間: {3:c}</value></data>
   <data name="Usage" xml:space="preserve"><value>使用方法:
-  shiori ast &lt;tree-sitterクエリ&gt; --language &lt;言語&gt; --allow &lt;ディレクトリ&gt;
-    [--path &lt;パス&gt;] [--limit &lt;1-100&gt;]
   shiori find &lt;クエリ&gt; --allow &lt;ディレクトリ&gt; [--limit &lt;1-100&gt;]
-  shiori search &lt;クエリ&gt; --allow &lt;ディレクトリ&gt; [--path &lt;パス&gt;] [--limit &lt;1-100&gt;]
-  shiori grep &lt;クエリ&gt; --allow &lt;ディレクトリ&gt; [--path &lt;パス&gt;] [--glob &lt;glob&gt;]
-    [--regex] [--case-sensitive] [--context &lt;0-10&gt;] [--limit &lt;1-100&gt;]
   shiori index build --allow &lt;ディレクトリ&gt;
   shiori index status --allow &lt;ディレクトリ&gt;
   shiori index rebuild --allow &lt;ディレクトリ&gt;
-  shiori navigate &lt;definition|references|implementations|callers|callees&gt; &lt;ファイル&gt;
-    --line &lt;1から始まる行番号&gt; --column &lt;1から始まる列番号&gt;
-    --allow &lt;ディレクトリ&gt; [--limit &lt;1-100&gt;]
-  shiori outline &lt;ソースファイル&gt; --allow &lt;ディレクトリ&gt;
-  shiori symbol &lt;クエリ&gt; --allow &lt;ディレクトリ&gt; [--kind &lt;種類&gt;] [--language &lt;言語&gt;]
-    [--path &lt;パス&gt;] [--limit &lt;1-100&gt;]
   shiori workspace add &lt;絶対ディレクトリ&gt;
   shiori workspace list
   shiori workspace remove &lt;名前、ID、絶対ディレクトリ&gt;

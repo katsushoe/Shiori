@@ -2,14 +2,12 @@
 
 [English](README.md) | [日本語](README.ja.md)
 
-Shiori is a fast, local-first file search server for AI coding agents. Indexed
-code search and semantic navigation are available as secondary capabilities.
+Shiori is a fast, local-first file search server for AI coding agents. It
+indexes file names, paths, and metadata without opening file contents.
 The server exposes a single Streamable HTTP MCP endpoint and keeps independent
 SQLite indexes for each workspace.
-Unified search uses bounded Git-aware ranking for tracked and recently changed
-files when Git metadata is available.
 
-Product version: `1.2.0`.
+Product version: `2.0.0`.
 
 ## Getting Started
 
@@ -22,7 +20,7 @@ Product version: `1.2.0`.
 
 ### Windows installer
 
-Download `shiori-v1.2.0-win-x64-setup.msi` from the
+Download `shiori-v2.0.0-win-x64-setup.msi` from the
 [latest release](https://github.com/katsushoe/Shiori/releases/latest), run it,
 and keep **Add Shiori to the current user's PATH** selected. The installer is
 self-contained, installs only for the current user, and uses `bin`, `config`,
@@ -30,7 +28,7 @@ self-contained, installs only for the current user, and uses `bin`, `config`,
 `bin` to PATH and can be removed from Windows **Installed apps**. Configuration,
 logs, and data remain after uninstall. Open a new terminal after installation.
 Setup asks for the application language and stores the selection in
-`config\shiori.ini`. The package includes ripgrep 15.2.0 for text search.
+`config\shiori.ini`.
 
 ```powershell
 shiori doctor
@@ -38,14 +36,14 @@ shiori doctor
 
 ### ZIP binary
 
-Download `shiori-v1.2.0-win-x64.zip` from the latest release, verify the adjacent
+Download `shiori-v2.0.0-win-x64.zip` from the latest release, verify the adjacent
 SHA-256 file, extract it to a permanent installation root, and add its `bin`
 directory to your user `PATH`. The ZIP contains the same standard directory
 layout as the installer and does not require a separate .NET installation.
 
 ```powershell
-$expected = (Get-Content .\shiori-v1.2.0-win-x64.zip.sha256).Split()[0]
-$actual = (Get-FileHash .\shiori-v1.2.0-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+$expected = (Get-Content .\shiori-v2.0.0-win-x64.zip.sha256).Split()[0]
+$actual = (Get-FileHash .\shiori-v2.0.0-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($actual -ne $expected) { throw "Checksum mismatch" }
 ```
 
@@ -62,7 +60,7 @@ cargo build --release --manifest-path .\native\shiori-engine\Cargo.toml
 dotnet restore .\Shiori.slnx
 dotnet build .\Shiori.slnx --configuration Release --no-restore
 dotnet test .\tests\Shiori.Core.Tests\Shiori.Core.Tests.csproj --configuration Release --no-build
-.\scripts\Publish-Windows.ps1 -Version 1.2.0
+.\scripts\Publish-Windows.ps1 -Version 2.0.0
 ```
 
 The publish script writes the installer, ZIP, and checksum files to
@@ -95,8 +93,9 @@ shiori index build --allow F:\Projects\ProjectB
 shiori index status --allow F:\Projects\ProjectA
 ```
 
-Later `index build` calls are incremental. For MCP clients, `update_indexes`
-updates selected or all allowed workspaces and returns after completion.
+Shiori counts included directories before indexing and prints directory-level
+progress in the console. Index updates are explicit CLI operations, not MCP
+operations.
 
 ### Start and Connect
 

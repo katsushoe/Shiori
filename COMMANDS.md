@@ -1,188 +1,58 @@
-# Shiori Commands
+# Shiori command reference
 
-[English](COMMANDS.md) | [日本語](COMMANDS.ja.md)
+Shiori v2 provides file-name and path discovery only. Index operations read
+directory entries and file metadata without opening file contents.
 
-This is the detailed reference for the Shiori CLI. All successful query and
-management commands write JSON to standard output; errors go to standard error.
+## CLI
 
-## Command Groups
+### `shiori find`
 
-| Group | Commands | Description |
-| :--- | :--- | :--- |
-| [Search](#search-commands) | `find`, `grep`, `search`, `symbol`, `ast`, `outline`, `navigate` | Locate and inspect files or code |
-| [Index](#index-commands) | `index build`, `index status`, `index rebuild` | Maintain one workspace index |
-| [Workspace](#workspace-commands) | `workspace add`, `workspace list`, `workspace remove` | Maintain CLI registrations |
-| [Integration](#integration-commands) | `config claude`, `config codex`, `serve`, `doctor` | Configure and operate MCP |
+```powershell
+shiori find <query> --allow <absolute-directory> [--limit <1-100>]
+```
 
-## Common Options
+Searches the ready SQLite file index for a file-name or relative-path fragment.
 
-- `--allow <directory>`: existing absolute workspace root; required by direct
-  search, outline, navigation, and index commands.
-- `--path <path>`: optional workspace-relative path filter.
-- `--limit <1-100>`: maximum results; default `20`.
-- Exit code `0` means success. Exit code `1` means invalid input, unavailable
-  runtime dependency, failed operation, or an unhealthy required diagnostic.
+### `shiori index build`
 
-## Search Commands
+```powershell
+shiori index build --allow <absolute-directory>
+```
 
-Commands: [`find`](#find), [`grep`](#grep), [`search`](#search),
-[`symbol`](#symbol), [`ast`](#ast), [`outline`](#outline),
-[`navigate`](#navigate).
+Counts included directories, prints `completed/total (percent)` progress, and
+publishes a new index generation. Metadata is streamed to SQLite in bounded
+batches. A failed build leaves the previous ready generation searchable.
 
-### `find`
+### `shiori index rebuild`
 
-**Purpose:** indexed file-name and path search. **Syntax:** `shiori find <query> --allow
-<directory> [--limit <1-100>]`. `query` must be non-empty. **Example:**
-`shiori find README --allow F:\Projects\Shiori --limit 10`. Shiori opens the
-workspace database and returns `{"results":[{"type":"file","path":"README.md"}]}`.
-It never reads outside `--allow`.
+Uses the same visible, streaming workflow as `index build` and explicitly
+replaces the ready generation.
 
-### `grep`
+### `shiori index status`
 
-**Purpose:** ripgrep-backed text search. **Syntax:** `shiori grep <query> --allow
-<directory> [--path <path>] [--glob <glob>] [--regex] [--case-sensitive]
-[--context <0-10>] [--limit <1-100>]`. Literal, case-insensitive search is the
-default. **Example:** `shiori grep TODO --allow F:\Projects\Shiori --glob *.md`.
-Results contain workspace-relative path, one-based line/column, and snippet;
-`{"results":[]}` means no match. Regex input is interpreted only with `--regex`.
+Returns workspace ID, state, file count, index version, and scan timestamps.
 
-### `search`
+### Workspace and server commands
 
-**Purpose:** planned search across file, symbol, and text providers. **Syntax:**
-`shiori search <query> --allow <directory> [--path <path>] [--limit <1-100>]`.
-**Example:** `shiori search WorkspaceRegistry --allow F:\Projects\Shiori`.
-The query planner selects providers, ranks and deduplicates locations, and
-returns JSON containing results, selected providers, and recoverable provider
-errors. A provider error can coexist with successful results.
+```powershell
+shiori workspace add <absolute-directory>
+shiori workspace list
+shiori workspace remove <name-or-id-or-absolute-directory>
+shiori doctor
+shiori config claude [--port <1-65535>] [--name <server-name>]
+shiori config codex [--port <1-65535>] [--name <server-name>]
+shiori serve [--port <1-65535>]
+```
 
-### `symbol`
+`workspace add` is registration only and does not extend
+`SHIORI_ALLOWED_WORKSPACES`.
 
-**Purpose:** indexed symbol search. **Syntax:** `shiori symbol <query> --allow
-<directory> [--kind <kind>] [--language <language>] [--path <path>]
-[--limit <1-100>]`. **Example:** `shiori symbol RunServer --language csharp --allow
-F:\Projects\Shiori`. Results include qualified name, kind, language, path, and
-one-based location. Filters are exact metadata filters.
+## MCP tools
 
-### `ast`
+- `get_version`: returns the running Shiori name and version.
+- `workspace_list`: lists allowed workspaces and their databases.
+- `index_status`: returns one allowed workspace's index state.
+- `search_files`: searches one, several, or all allowed workspaces.
 
-**Purpose:** Tree-sitter structural search. **Syntax:** `shiori ast
-<tree-sitter-query> --language <language> --allow <directory> [--path <path>]
-[--limit <1-100>]`. Supported languages are `c`, `cpp`, `csharp`, `go`, `java`,
-`javascript`, `python`, `rust`, and `typescript`. **Example:** `shiori ast
-'(class_declaration name: (identifier) @name)' --language csharp --allow
-F:\Projects\Shiori`. Output contains capture name, node kind, path, position,
-and a bounded snippet. Invalid queries return exit code `1`.
-
-### `outline`
-
-**Purpose:** return indexed symbols in one source file. **Syntax:** `shiori outline
-<source-file> --allow <directory>`. The file may be absolute or workspace
-relative but must remain inside the workspace. **Example:** `shiori outline
-src\Shiori.Cli\Program.cs --allow F:\Projects\Shiori`. Output contains the file
-language and ordered symbol tree; an unsupported file returns an empty outline.
-
-### `navigate`
-
-**Purpose:** C# semantic navigation through an external language server. **Syntax:**
-`shiori navigate <definition|references|implementations|callers|callees> <file>
---line <one-based> --column <one-based> --allow <directory> [--limit <1-100>]`.
-**Example:** `shiori navigate definition src\Shiori.Cli\Program.cs --line 20
---column 18 --allow F:\Projects\Shiori`. Output reports `success`, locations,
-and an error when navigation cannot run. `csharp-ls` or OmniSharp is required;
-source coordinates are one-based.
-
-## Index Commands
-
-Commands: [`index build`](#index-build), [`index status`](#index-status),
-[`index rebuild`](#index-rebuild).
-
-### `index build`
-
-**Purpose:** create or incrementally update one workspace index. **Syntax:** `shiori
-index build --allow <directory>`. **Example:** `shiori index build --allow
-F:\Projects\Shiori`. Existing metadata and hashes avoid unnecessary parsing;
-added, changed, and deleted files update SQLite. Output contains workspace ID,
-status, file/symbol counts, versions, and scan timestamps.
-
-### `index status`
-
-**Purpose:** inspect the persistent index without rebuilding it. **Syntax:** `shiori
-index status --allow <directory>`. **Example:** `shiori index status --allow
-F:\Projects\Shiori`. The same status schema as `index build` is returned;
-missing indexes report their unbuilt state and zero counts.
-
-### `index rebuild`
-
-**Purpose:** force a full rescan. **Syntax:** `shiori index rebuild --allow
-<directory>`. **Example:** `shiori index rebuild --allow F:\Projects\Shiori`.
-Shiori refreshes all indexed file and symbol rows and returns the index status.
-This is more expensive than `index build`; use it for recovery or parser changes.
-
-## Workspace Commands
-
-Commands: [`workspace add`](#workspace-add), [`workspace list`](#workspace-list),
-[`workspace remove`](#workspace-remove).
-
-### `workspace add`
-
-**Purpose:** register a workspace for CLI discovery and initialize its database.
-**Syntax:** `shiori workspace add <absolute-directory>`. **Example:** `shiori workspace
-add F:\Projects\Shiori`. Output is the workspace ID, name, and normalized path.
-Duplicate IDs are updated; conflicting directory names are rejected. This does
-not authorize MCP access.
-
-### `workspace list`
-
-**Purpose:** list registrations. Syntax and example: `shiori workspace list`.
-Output is `{"workspaces":[...]}` in stable name/path order. An empty registry
-returns an empty array and exit code `0`.
-
-### `workspace remove`
-
-**Purpose:** remove one registration by name, ID, or absolute path. **Syntax:** `shiori
-workspace remove <identifier>`. **Example:** `shiori workspace remove Shiori`.
-Output is the removed workspace record. Its SQLite database is preserved; an
-unknown or ambiguous identifier fails safely.
-
-## Integration Commands
-
-Commands: [`config claude`](#config-claude), [`config codex`](#config-codex),
-[`serve`](#serve), [`doctor`](#doctor).
-
-### `config claude`
-
-**Purpose:** generate project-scoped Claude Code MCP JSON. **Syntax:** `shiori config
-claude [--port <1-65535>] [--name <server-name>]`; defaults are `39473` and
-`shiori`. **Example:** `shiori config claude > .mcp.json`. Output uses Streamable
-HTTP and `${SHIORI_MCP_TOKEN}`; it never writes the token value. Server names
-allow letters, digits, `_`, and `-` only.
-
-### `config codex`
-
-**Purpose:** generate a Codex MCP TOML section. **Syntax:** `shiori config codex
-[--port <1-65535>] [--name <server-name>]`. **Example:** `shiori config codex` and
-merge the output into `%USERPROFILE%\.codex\config.toml`. Output sets
-`bearer_token_env_var = "SHIORI_MCP_TOKEN"` and never writes its value.
-
-### `serve`
-
-**Purpose:** run the single stateless Streamable HTTP MCP server. **Syntax:** `shiori
-serve [--port <1-65535>]`; default port is `39473`. **Example:** `shiori serve
---port 39473`. It binds only to loopback, exposes `/health` and authenticated
-`/mcp`, and runs until stopped. `SHIORI_MCP_TOKEN` and
-`SHIORI_ALLOWED_WORKSPACES` are required; startup errors return exit code `1`.
-
-### `doctor`
-
-**Purpose:** validate Native ABI, SQLite/FTS5, ripgrep, Tree-sitter, optional C# LSP,
-data-directory access, and MCP environment settings. Syntax and example:
-`shiori doctor`. Output is `{"status":"ok|warning|error","checks":[...]}`.
-Warnings such as a missing optional LSP still return `0`; required runtime errors
-return `1`.
-
-## Safety Notes
-
-Canonical workspace checks apply to every file operation. MCP authorization is
-controlled only by `SHIORI_ALLOWED_WORKSPACES`; CLI registrations do not grant
-access. `index rebuild` is the only intentionally full-rescan command and does
-not delete source files.
+MCP tools are read-only. Index builds are explicit CLI operations so progress
+is visible in a console.

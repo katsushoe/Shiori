@@ -24,10 +24,10 @@ response-time commitment is currently offered.
 - `SHIORI_ALLOWED_WORKSPACES` is the MCP filesystem authorization boundary.
 - Canonical path checks reject traversal and symlink escapes from allowed roots.
 - CLI workspace registration does not grant MCP access.
-- Search and navigation tools read source files; index operations write only to
-  Shiori's data directory and do not modify source files.
-- Shiori does not require external network access at runtime. Optional external
-  language-server processes are started locally.
+- Index operations read directory entries and file metadata but do not open file
+  contents. They write only to Shiori's data directory.
+- Shiori does not require external network access at runtime or start external
+  search and language-server processes.
 
 ## Secrets Handling
 
@@ -42,6 +42,5 @@ the token after suspected disclosure and restart both server and clients.
 - Protect the operating-system account and Shiori's `config`, `logs`, and `data`
   directories from untrusted users.
 - Verify package SHA-256 files before installation.
-- Keep Shiori, ripgrep, SQLite, Tree-sitter parsers, and optional language
-  servers updated.
+- Keep Shiori and SQLite updated.
 - Review client MCP configuration before enabling Shiori in an untrusted project.

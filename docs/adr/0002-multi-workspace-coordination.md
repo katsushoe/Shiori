@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted.
+Partially superseded by [ADR 0003](0003-file-search-only-index.md).
+Multi-workspace file search remains; MCP-triggered index updates are removed.
 
 ## Context
 

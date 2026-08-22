@@ -1,25 +1,20 @@
 #![allow(linker_messages)]
 
+use database::{IndexStatus, WorkspaceDatabase};
+use serde::Serialize;
 use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::slice;
 
-mod ast_search;
 mod database;
 mod index;
-mod languages;
-mod ripgrep;
-mod symbols;
-mod text_search;
 
-use database::{IndexStatus, WorkspaceDatabase};
-use serde::{Deserialize, Serialize};
-
-const ABI_VERSION: u32 = 2;
+const ABI_VERSION: u32 = 3;
 const STATUS_INVALID_ARGUMENT: i32 = 1;
 const STATUS_IO: i32 = 2;
 const STATUS_PANIC: i32 = 255;
+
 struct Engine {
     root: PathBuf,
     database: WorkspaceDatabase,
@@ -31,23 +26,18 @@ pub struct NativeBuffer {
     length: usize,
 }
 
+type IndexProgressCallback = unsafe extern "C" fn(
+    completed: u64,
+    total: u64,
+    path: *const u8,
+    path_length: usize,
+    context: *mut c_void,
+);
+
 #[derive(Serialize)]
 struct RuntimeDiagnostics {
     abi_version: u32,
     sqlite: database::SqliteDiagnostics,
-    ripgrep_available: bool,
-    ripgrep_version: Option<String>,
-    tree_sitter_version: &'static str,
-    tree_sitter_languages: &'static [&'static str],
-}
-
-#[derive(Deserialize)]
-struct SymbolSearchRequest {
-    query: String,
-    kind: Option<String>,
-    language: Option<String>,
-    path: Option<String>,
-    limit: usize,
 }
 
 impl NativeBuffer {
@@ -83,26 +73,9 @@ pub unsafe extern "C" fn shiori_engine_diagnostics(
                 "diagnostics result is null".to_owned(),
             ));
         }
-        let sqlite = database::sqlite_diagnostics().map_err(|message| (STATUS_IO, message))?;
-        languages::validate_parsers().map_err(|message| (STATUS_IO, message))?;
-        let ripgrep_output = ripgrep::command().arg("--version").output();
-        let (ripgrep_available, ripgrep_version) = match ripgrep_output {
-            Ok(output) if output.status.success() => {
-                let version = String::from_utf8_lossy(&output.stdout)
-                    .lines()
-                    .next()
-                    .map(str::to_owned);
-                (true, version)
-            }
-            _ => (false, None),
-        };
         let diagnostics = RuntimeDiagnostics {
             abi_version: ABI_VERSION,
-            sqlite,
-            ripgrep_available,
-            ripgrep_version,
-            tree_sitter_version: languages::PARSER_VERSION,
-            tree_sitter_languages: languages::SUPPORTED_LANGUAGES,
+            sqlite: database::sqlite_diagnostics().map_err(|message| (STATUS_IO, message))?,
         };
         let json = serde_json::to_string(&diagnostics).map_err(|source| {
             (
@@ -149,8 +122,7 @@ pub unsafe extern "C" fn shiori_engine_open(
 }
 
 /// # Safety
-/// `handle` must be an open engine handle. `result` and `error`, when non-null,
-/// must point to writable `NativeBuffer` values.
+/// `handle` must be open. Output pointers, when non-null, must be writable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shiori_engine_workspace_info(
     handle: *mut c_void,
@@ -158,13 +130,7 @@ pub unsafe extern "C" fn shiori_engine_workspace_info(
     error: *mut NativeBuffer,
 ) -> i32 {
     ffi_boundary(error, || {
-        if handle.is_null() || result.is_null() {
-            return Err((
-                STATUS_INVALID_ARGUMENT,
-                "invalid workspace info arguments".to_owned(),
-            ));
-        }
-        let engine = unsafe { &*handle.cast::<Engine>() };
+        let engine = unsafe { engine_and_result(handle, result) }?;
         let info = engine.database.info();
         let json = format!(
             "{{\"id\":\"{}\",\"path\":\"{}\",\"name\":\"{}\",\"database_path\":\"{}\",\"schema_version\":{}}}",
@@ -180,8 +146,7 @@ pub unsafe extern "C" fn shiori_engine_workspace_info(
 }
 
 /// # Safety
-/// `handle` must be an open engine handle and `query` must be readable for
-/// `query_length` bytes. Output pointers, when non-null, must be writable.
+/// `handle` must be open and `query` must be readable for `query_length` bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shiori_engine_search_files(
     handle: *mut c_void,
@@ -199,7 +164,9 @@ pub unsafe extern "C" fn shiori_engine_search_files(
             ));
         }
         let engine = unsafe { &*handle.cast::<Engine>() };
-        let query = unsafe { read_utf8(query, query_length) }?.to_lowercase();
+        let query = unsafe { read_utf8(query, query_length) }?
+            .trim()
+            .to_lowercase();
         if query.is_empty() {
             return Err((
                 STATUS_INVALID_ARGUMENT,
@@ -211,7 +178,10 @@ pub unsafe extern "C" fn shiori_engine_search_files(
             .index_status()
             .map_err(|message| (STATUS_IO, message))?;
         if status.status != "ready" {
-            rebuild_index(engine)?;
+            return Err((
+                STATUS_IO,
+                "workspace index is not ready; run shiori index build".to_owned(),
+            ));
         }
         let matches = engine
             .database
@@ -223,8 +193,7 @@ pub unsafe extern "C" fn shiori_engine_search_files(
 }
 
 /// # Safety
-/// `handle` must be an open engine handle. `result` and `error`, when non-null,
-/// must point to writable `NativeBuffer` values.
+/// `handle` must be open. Output pointers, when non-null, must be writable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shiori_engine_index_status(
     handle: *mut c_void,
@@ -238,225 +207,78 @@ pub unsafe extern "C" fn shiori_engine_index_status(
 }
 
 /// # Safety
-/// `handle` must be an open engine handle. `result` and `error`, when non-null,
-/// must point to writable `NativeBuffer` values.
+/// `handle` must be open and `count` must be writable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn shiori_engine_index_directory_count(
+    handle: *mut c_void,
+    count: *mut u64,
+    error: *mut NativeBuffer,
+) -> i32 {
+    ffi_boundary(error, || {
+        if handle.is_null() || count.is_null() {
+            return Err((
+                STATUS_INVALID_ARGUMENT,
+                "invalid directory count arguments".to_owned(),
+            ));
+        }
+        let engine = unsafe { &*handle.cast::<Engine>() };
+        let value =
+            index::count_directories(&engine.root).map_err(|message| (STATUS_IO, message))?;
+        unsafe { *count = value };
+        Ok(())
+    })
+}
+
+/// # Safety
+/// `handle` must be open. `callback`, when supplied, must remain valid for this call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shiori_engine_index_build(
     handle: *mut c_void,
+    total_directories: u64,
+    callback: Option<IndexProgressCallback>,
+    context: *mut c_void,
     result: *mut NativeBuffer,
     error: *mut NativeBuffer,
 ) -> i32 {
     ffi_boundary(error, || {
         let engine = unsafe { engine_and_result(handle, result) }?;
+        if total_directories == 0 {
+            return Err((
+                STATUS_INVALID_ARGUMENT,
+                "directory count must be greater than zero".to_owned(),
+            ));
+        }
         let status = engine
             .database
-            .index_status()
+            .build_index(&engine.root, total_directories, |completed, total, path| {
+                if let Some(notify) = callback {
+                    let bytes = path.as_bytes();
+                    unsafe { notify(completed, total, bytes.as_ptr(), bytes.len(), context) };
+                }
+            })
             .map_err(|message| (STATUS_IO, message))?;
-        let status = if status.status == "ready" {
-            incremental_index(engine)?
-        } else {
-            rebuild_index(engine)?
-        };
         write_index_status(Ok(status), result)
     })
 }
 
 /// # Safety
-/// `handle` must be an open engine handle. `result` and `error`, when non-null,
-/// must point to writable `NativeBuffer` values.
+/// Same requirements as `shiori_engine_index_build`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shiori_engine_index_rebuild(
     handle: *mut c_void,
+    total_directories: u64,
+    callback: Option<IndexProgressCallback>,
+    context: *mut c_void,
     result: *mut NativeBuffer,
     error: *mut NativeBuffer,
 ) -> i32 {
-    ffi_boundary(error, || {
-        let engine = unsafe { engine_and_result(handle, result) }?;
-        let status = rebuild_index(engine)?;
-        write_index_status(Ok(status), result)
-    })
+    unsafe {
+        shiori_engine_index_build(handle, total_directories, callback, context, result, error)
+    }
 }
 
 /// # Safety
-/// `handle` must be an open engine handle and `request` must be readable for
-/// `request_length` bytes. Output pointers, when non-null, must be writable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn shiori_engine_search_text(
-    handle: *mut c_void,
-    request: *const u8,
-    request_length: usize,
-    result: *mut NativeBuffer,
-    error: *mut NativeBuffer,
-) -> i32 {
-    ffi_boundary(error, || {
-        if handle.is_null() || result.is_null() {
-            return Err((
-                STATUS_INVALID_ARGUMENT,
-                "invalid text search arguments".to_owned(),
-            ));
-        }
-        let engine = unsafe { &*handle.cast::<Engine>() };
-        let request = unsafe { read_utf8(request, request_length) }?;
-        let request: text_search::TextSearchRequest =
-            serde_json::from_str(request).map_err(|source| {
-                (
-                    STATUS_INVALID_ARGUMENT,
-                    format!("invalid text search request: {source}"),
-                )
-            })?;
-        let response =
-            text_search::search(&engine.root, &request).map_err(|message| (STATUS_IO, message))?;
-        let json = serde_json::to_string(&response).map_err(|source| {
-            (
-                STATUS_IO,
-                format!("cannot serialize text search response: {source}"),
-            )
-        })?;
-        unsafe { *result = NativeBuffer::from_string(json) };
-        Ok(())
-    })
-}
-
-/// # Safety
-/// `handle` must be an open engine handle and `request` must be readable for
-/// `request_length` bytes. Output pointers, when non-null, must be writable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn shiori_engine_search_symbols(
-    handle: *mut c_void,
-    request: *const u8,
-    request_length: usize,
-    result: *mut NativeBuffer,
-    error: *mut NativeBuffer,
-) -> i32 {
-    ffi_boundary(error, || {
-        if handle.is_null() || result.is_null() {
-            return Err((
-                STATUS_INVALID_ARGUMENT,
-                "invalid symbol search arguments".to_owned(),
-            ));
-        }
-        let engine = unsafe { &*handle.cast::<Engine>() };
-        let request = unsafe { read_utf8(request, request_length) }?;
-        let request: SymbolSearchRequest = serde_json::from_str(request).map_err(|source| {
-            (
-                STATUS_INVALID_ARGUMENT,
-                format!("invalid symbol search request: {source}"),
-            )
-        })?;
-        if request.query.trim().is_empty() || !(1..=100).contains(&request.limit) {
-            return Err((
-                STATUS_INVALID_ARGUMENT,
-                "query must not be empty and limit must be from 1 to 100".to_owned(),
-            ));
-        }
-        ensure_index(engine)?;
-        let response = engine
-            .database
-            .search_symbols(
-                request.query.trim(),
-                request.kind.as_deref(),
-                request.language.as_deref(),
-                request.path.as_deref(),
-                request.limit,
-            )
-            .map_err(|message| (STATUS_IO, message))?;
-        let json = serde_json::to_string(&response).map_err(|source| {
-            (
-                STATUS_IO,
-                format!("cannot serialize symbol search response: {source}"),
-            )
-        })?;
-        unsafe { *result = NativeBuffer::from_string(json) };
-        Ok(())
-    })
-}
-
-/// # Safety
-/// `handle` must be an open engine handle and `request` must be readable for
-/// `request_length` bytes. Output pointers, when non-null, must be writable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn shiori_engine_search_ast(
-    handle: *mut c_void,
-    request: *const u8,
-    request_length: usize,
-    result: *mut NativeBuffer,
-    error: *mut NativeBuffer,
-) -> i32 {
-    ffi_boundary(error, || {
-        if handle.is_null() || result.is_null() {
-            return Err((
-                STATUS_INVALID_ARGUMENT,
-                "invalid AST search arguments".to_owned(),
-            ));
-        }
-        let engine = unsafe { &*handle.cast::<Engine>() };
-        let request = unsafe { read_utf8(request, request_length) }?;
-        let request: ast_search::AstSearchRequest =
-            serde_json::from_str(request).map_err(|source| {
-                (
-                    STATUS_INVALID_ARGUMENT,
-                    format!("invalid AST search request: {source}"),
-                )
-            })?;
-        let response = ast_search::search(&engine.root, &request)
-            .map_err(|message| (STATUS_INVALID_ARGUMENT, message))?;
-        let json = serde_json::to_string(&response).map_err(|source| {
-            (
-                STATUS_IO,
-                format!("cannot serialize AST search response: {source}"),
-            )
-        })?;
-        unsafe { *result = NativeBuffer::from_string(json) };
-        Ok(())
-    })
-}
-
-/// # Safety
-/// `handle` must be an open engine handle and `path` must be readable for
-/// `path_length` bytes. Output pointers, when non-null, must be writable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn shiori_engine_file_outline(
-    handle: *mut c_void,
-    path: *const u8,
-    path_length: usize,
-    result: *mut NativeBuffer,
-    error: *mut NativeBuffer,
-) -> i32 {
-    ffi_boundary(error, || {
-        if handle.is_null() || result.is_null() {
-            return Err((
-                STATUS_INVALID_ARGUMENT,
-                "invalid file outline arguments".to_owned(),
-            ));
-        }
-        let engine = unsafe { &*handle.cast::<Engine>() };
-        let requested = unsafe { read_utf8(path, path_length) }?;
-        if requested.is_empty() {
-            return Err((
-                STATUS_INVALID_ARGUMENT,
-                "outline path must not be empty".to_owned(),
-            ));
-        }
-        let relative_path = resolve_workspace_file(&engine.root, requested)?;
-        ensure_index(engine)?;
-        let outline = engine
-            .database
-            .file_outline(&relative_path)
-            .map_err(|message| (STATUS_IO, message))?;
-        let json = serde_json::to_string(&outline).map_err(|source| {
-            (
-                STATUS_IO,
-                format!("cannot serialize file outline: {source}"),
-            )
-        })?;
-        unsafe { *result = NativeBuffer::from_string(json) };
-        Ok(())
-    })
-}
-
-/// # Safety
-/// `handle` must have been returned by `shiori_engine_open`, must not already be
-/// closed, and must not be used after this call succeeds.
+/// `handle` must have been returned by `shiori_engine_open` and not already closed.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shiori_engine_close(handle: *mut c_void) -> bool {
     if handle.is_null() {
@@ -469,8 +291,7 @@ pub unsafe extern "C" fn shiori_engine_close(handle: *mut c_void) -> bool {
 }
 
 /// # Safety
-/// `buffer` must have been returned by this library and must not have already
-/// been freed. Its pointer, length, and capacity must remain unchanged.
+/// `buffer` must have been returned by this library and not already freed.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shiori_engine_free_buffer(buffer: NativeBuffer) {
     if buffer.pointer.is_null() {
@@ -521,67 +342,6 @@ unsafe fn engine_and_result<'a>(
     Ok(unsafe { &*handle.cast::<Engine>() })
 }
 
-fn rebuild_index(engine: &Engine) -> Result<IndexStatus, (i32, String)> {
-    let files = index::scan(&engine.root).map_err(|message| (STATUS_IO, message))?;
-    engine
-        .database
-        .replace_file_index(&files)
-        .map_err(|message| (STATUS_IO, message))?;
-    engine
-        .database
-        .index_status()
-        .map_err(|message| (STATUS_IO, message))
-}
-
-fn incremental_index(engine: &Engine) -> Result<IndexStatus, (i32, String)> {
-    let previous = engine
-        .database
-        .file_fingerprints()
-        .map_err(|message| (STATUS_IO, message))?;
-    let scan =
-        index::scan_incremental(&engine.root, &previous).map_err(|message| (STATUS_IO, message))?;
-    engine
-        .database
-        .apply_incremental_index(&scan)
-        .map_err(|message| (STATUS_IO, message))?;
-    engine
-        .database
-        .index_status()
-        .map_err(|message| (STATUS_IO, message))
-}
-
-fn ensure_index(engine: &Engine) -> Result<(), (i32, String)> {
-    let status = engine
-        .database
-        .index_status()
-        .map_err(|message| (STATUS_IO, message))?;
-    if status.status != "ready" {
-        rebuild_index(engine)?;
-    }
-    Ok(())
-}
-
-fn resolve_workspace_file(root: &Path, requested: &str) -> Result<String, (i32, String)> {
-    let path = root
-        .join(requested)
-        .canonicalize()
-        .map_err(|source| (STATUS_IO, format!("outline file is unavailable: {source}")))?;
-    if !path.starts_with(root) || !path.is_file() {
-        return Err((
-            STATUS_INVALID_ARGUMENT,
-            "outline path must be a file inside the workspace".to_owned(),
-        ));
-    }
-    path.strip_prefix(root)
-        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
-        .map_err(|source| {
-            (
-                STATUS_INVALID_ARGUMENT,
-                format!("cannot resolve outline path: {source}"),
-            )
-        })
-}
-
 fn write_index_status(
     status: Result<IndexStatus, String>,
     result: *mut NativeBuffer,
@@ -598,55 +358,37 @@ fn write_index_status(
 }
 
 unsafe fn read_utf8<'a>(pointer: *const u8, length: usize) -> Result<&'a str, (i32, String)> {
-    if pointer.is_null() {
-        return Err((STATUS_INVALID_ARGUMENT, "UTF-8 input is null".to_owned()));
+    if pointer.is_null() && length > 0 {
+        return Err((STATUS_INVALID_ARGUMENT, "input pointer is null".to_owned()));
     }
-    std::str::from_utf8(unsafe { slice::from_raw_parts(pointer, length) }).map_err(|_| {
+    let bytes = unsafe { slice::from_raw_parts(pointer, length) };
+    std::str::from_utf8(bytes).map_err(|source| {
         (
             STATUS_INVALID_ARGUMENT,
-            "input is not valid UTF-8".to_owned(),
+            format!("input is not UTF-8: {source}"),
         )
     })
 }
 
 fn serialize_results(results: &[PathBuf]) -> String {
-    let values = results
-        .iter()
-        .map(|path| {
-            format!(
-                "{{\"type\":\"file\",\"path\":\"{}\",\"line\":null,\"snippet\":null}}",
-                escape_json(&path.to_string_lossy().replace('\\', "/"))
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(",");
-    format!("{{\"results\":[{values}]}}")
+    let mut json = String::from("[");
+    for (index, result) in results.iter().enumerate() {
+        if index > 0 {
+            json.push(',');
+        }
+        json.push_str("{\"type\":\"file\",\"path\":\"");
+        json.push_str(&escape_json(&result.to_string_lossy().replace('\\', "/")));
+        json.push_str("\",\"line\":null,\"snippet\":null,\"column\":null}");
+    }
+    json.push(']');
+    json
 }
 
 fn escape_json(value: &str) -> String {
-    let mut escaped = String::with_capacity(value.len());
-    for character in value.chars() {
-        match character {
-            '"' => escaped.push_str("\\\""),
-            '\\' => escaped.push_str("\\\\"),
-            '\n' => escaped.push_str("\\n"),
-            '\r' => escaped.push_str("\\r"),
-            '\t' => escaped.push_str("\\t"),
-            character if character.is_control() => {
-                escaped.push_str(&format!("\\u{:04x}", character as u32))
-            }
-            character => escaped.push(character),
-        }
-    }
-    escaped
-}
-
-#[cfg(test)]
-mod tests {
-    use super::escape_json;
-
-    #[test]
-    fn escape_json_escapes_control_characters() {
-        assert_eq!(escape_json("a\"b\\c\n"), "a\\\"b\\\\c\\n");
-    }
+    value
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
 }

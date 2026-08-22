@@ -48,7 +48,6 @@ JSON field names, logs, and MCP protocol values remain language-neutral.
 | `SHIORI_ALLOWED_WORKSPACES` | For `serve` | Path list | None | Existing absolute directories |
 | `SHIORI_DATA_HOME` | No | Absolute path | `<install-root>\data` | Writable directory |
 | `SHIORI_EXCLUDE_PATTERNS` | No | Pattern list | None | `;`-separated gitignore-style patterns |
-| `SHIORI_CSHARP_LSP_PATH` | No | Absolute file path | Auto-discovery | Existing C# language-server executable |
 
 Environment variables inherited by the `shiori serve` process take effect at
 server startup. Restart the server after changing them.
@@ -92,16 +91,6 @@ Omission adds no user-defined patterns.
 
 ```powershell
 $env:SHIORI_EXCLUDE_PATTERNS = 'generated/**;*.min.js'
-```
-
-### `SHIORI_CSHARP_LSP_PATH`
-
-Optional absolute path to `csharp-ls` or OmniSharp. When omitted, Shiori searches
-`PATH`. It is used only by C# semantic navigation; file and indexed code search
-remain available without it.
-
-```powershell
-$env:SHIORI_CSHARP_LSP_PATH = 'C:\Tools\csharp-ls.exe'
 ```
 
 ## Profile Settings

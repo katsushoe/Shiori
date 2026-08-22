@@ -3,7 +3,6 @@ using ModelContextProtocol.AspNetCore;
 using ModelContextProtocol.Server;
 using Shiori.Cli;
 using Shiori.Core.Logging;
-using Shiori.Core.Lsp;
 
 namespace Shiori.Cli.Server;
 
@@ -34,21 +33,10 @@ internal static class ShioriHttpServer
         builder.WebHost.ConfigureKestrel(server => server.Listen(IPAddress.Loopback, port));
         builder.Configuration["AllowedHosts"] = "localhost;127.0.0.1;[::1]";
         builder.Logging.AddProvider(new FileLoggerProvider(InstallationLayout.GetDirectory("logs")));
-        builder.Services.AddSingleton(serviceProvider =>
-        {
-            var logger = serviceProvider.GetRequiredService<ILogger<NativeEngineRegistry>>();
-            return new NativeEngineRegistry(
-                allowedWorkspaces,
-                (workspace, exception) => logger.LogError(
-                    exception,
-                    "Incremental index watcher failed for {Workspace}",
-                    workspace));
-        });
+        builder.Services.AddSingleton(_ => new NativeEngineRegistry(allowedWorkspaces));
         builder.Services.AddSingleton<IWorkspaceEngineProvider>(serviceProvider =>
             serviceProvider.GetRequiredService<NativeEngineRegistry>());
         builder.Services.AddSingleton<WorkspaceCoordinator>();
-        builder.Services.AddSingleton<ILspServerConnectionFactory, ProcessLspServerConnectionFactory>();
-        builder.Services.AddSingleton<LspServerManager>();
         builder.Services.AddMcpServer()
             .WithHttpTransport(transport => transport.Stateless = true)
             .WithTools<ShioriTools>();

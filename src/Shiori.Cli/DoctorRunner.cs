@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Shiori.Core.Lsp;
 using Shiori.Native;
 
 namespace Shiori.Cli;
@@ -20,7 +19,6 @@ internal static class DoctorRunner
     {
         var checks = new List<DoctorCheck>();
         AddNativeChecks(checks);
-        AddLspCheck(checks);
         AddDirectoryChecks(checks);
         AddSettingsCheck(checks);
         AddMcpChecks(checks);
@@ -31,17 +29,6 @@ internal static class DoctorRunner
         return status == "error" ? 1 : 0;
     }
 
-    private static void AddLspCheck(List<DoctorCheck> checks)
-    {
-        var server = CSharpLanguageServerDiscovery.Find();
-        checks.Add(new DoctorCheck(
-            "lsp_csharp",
-            server is null ? "warning" : "ok",
-            server is null
-                ? $"not found; configure {CSharpLanguageServerDiscovery.PathVariable}"
-                : $"{server.ExecutablePath} ({server.Source})"));
-    }
-
     private static void AddNativeChecks(List<DoctorCheck> checks)
     {
         try
@@ -49,28 +36,16 @@ internal static class DoctorRunner
             var diagnostics = NativeAbiStatus.GetDiagnostics();
             var abiStatus = diagnostics.AbiVersion == NativeAbiStatus.GetAbiVersion() ? "ok" : "error";
             checks.Add(new DoctorCheck("native_engine", abiStatus, $"ABI {diagnostics.AbiVersion}"));
-            var sqliteStatus = diagnostics.Sqlite.QuickCheck == "ok" && diagnostics.Sqlite.Fts5Enabled
-                ? "ok"
-                : "error";
+            var sqliteStatus = diagnostics.Sqlite.QuickCheck == "ok" ? "ok" : "error";
             checks.Add(new DoctorCheck(
                 "sqlite",
                 sqliteStatus,
-                $"SQLite {diagnostics.Sqlite.Version}; quick_check={diagnostics.Sqlite.QuickCheck}; FTS5={diagnostics.Sqlite.Fts5Enabled}"));
-            checks.Add(new DoctorCheck(
-                "ripgrep",
-                diagnostics.RipgrepAvailable ? "ok" : "error",
-                diagnostics.RipgrepVersion ?? "ripgrep is unavailable"));
-            checks.Add(new DoctorCheck(
-                "tree_sitter",
-                diagnostics.TreeSitterLanguages.Count == 9 ? "ok" : "error",
-                $"Tree-sitter {diagnostics.TreeSitterVersion}; {string.Join(", ", diagnostics.TreeSitterLanguages)}"));
+                $"SQLite {diagnostics.Sqlite.Version}; quick_check={diagnostics.Sqlite.QuickCheck}"));
         }
         catch (Exception exception) when (exception is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException or InvalidOperationException)
         {
             checks.Add(new DoctorCheck("native_engine", "error", exception.Message));
             checks.Add(new DoctorCheck("sqlite", "error", "Native SQLite diagnostics could not run."));
-            checks.Add(new DoctorCheck("ripgrep", "error", "Native ripgrep diagnostics could not run."));
-            checks.Add(new DoctorCheck("tree_sitter", "error", "Native Tree-sitter diagnostics could not run."));
         }
     }
 

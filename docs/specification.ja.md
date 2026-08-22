@@ -1,6 +1,9 @@
 # SPEC.md Version
 2026.08.17
 
+> **v1.x仕様（置換予定）:** v2.0.0の実装仕様は
+> [`specification-v2.0.ja.md`](specification-v2.0.ja.md)を正本とします。
+
 # 変更履歴
 
 - 2026.08.16

@@ -1,14 +1,16 @@
-use crate::index::IndexedFile;
-use rusqlite::{Connection, OptionalExtension, Transaction, params};
+use crate::index::{self, IndexedFile, ScanEvent};
+use rusqlite::{Connection, params};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
 use std::fmt::Write;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
+const BATCH_FILE_LIMIT: usize = 1_000;
+const BATCH_BYTE_LIMIT: usize = 16 * 1024 * 1024;
+const BATCH_TIME_LIMIT: Duration = Duration::from_secs(2);
 
 pub struct WorkspaceDatabase {
     connection: Mutex<Connection>,
@@ -28,9 +30,7 @@ pub struct IndexStatus {
     pub workspace_id: String,
     pub status: String,
     pub indexed_files: i64,
-    pub indexed_symbols: i64,
     pub index_version: i64,
-    pub parser_version: Option<String>,
     pub last_scan: Option<String>,
     pub last_full_index: Option<String>,
 }
@@ -39,61 +39,6 @@ pub struct IndexStatus {
 pub struct SqliteDiagnostics {
     pub version: String,
     pub quick_check: String,
-    pub fts5_enabled: bool,
-}
-
-#[derive(Serialize)]
-pub struct FileOutline {
-    pub path: String,
-    pub language: Option<String>,
-    pub symbols: Vec<OutlineSymbol>,
-}
-
-#[derive(Serialize)]
-pub struct OutlineSymbol {
-    pub name: String,
-    pub qualified_name: String,
-    pub kind: String,
-    pub language: String,
-    pub start_line: i64,
-    pub start_column: i64,
-    pub end_line: i64,
-    pub end_column: i64,
-    pub signature: Option<String>,
-    pub children: Vec<OutlineSymbol>,
-}
-
-#[derive(Serialize)]
-pub struct SymbolSearchResponse {
-    pub results: Vec<SymbolSearchResult>,
-}
-
-#[derive(Serialize)]
-pub struct SymbolSearchResult {
-    pub r#type: &'static str,
-    pub name: String,
-    pub qualified_name: Option<String>,
-    pub kind: String,
-    pub language: String,
-    pub path: String,
-    pub line: i64,
-    pub column: i64,
-    pub score: f64,
-    pub signature: Option<String>,
-}
-
-struct StoredSymbol {
-    id: i64,
-    parent_id: Option<i64>,
-    name: String,
-    qualified_name: String,
-    kind: String,
-    language: String,
-    start_line: i64,
-    start_column: i64,
-    end_line: i64,
-    end_column: i64,
-    signature: Option<String>,
 }
 
 impl WorkspaceDatabase {
@@ -106,12 +51,11 @@ impl WorkspaceDatabase {
         let normalized_path = normalize_path(root);
         let workspace_id = workspace_id(&normalized_path);
         let database_directory = data_root.join("indexes").join(&workspace_id);
-        fs::create_dir_all(&database_directory)
+        std::fs::create_dir_all(&database_directory)
             .map_err(|source| format!("cannot create index directory: {source}"))?;
         let database_path = database_directory.join("shiori.db");
         let mut connection = Connection::open(&database_path)
             .map_err(|source| format!("cannot open workspace database: {source}"))?;
-
         configure(&connection)?;
         migrate(&mut connection)?;
         let name = root
@@ -120,7 +64,6 @@ impl WorkspaceDatabase {
             .unwrap_or(&normalized_path)
             .to_owned();
         register_workspace(&connection, &workspace_id, &normalized_path, &name)?;
-
         Ok(Self {
             connection: Mutex::new(connection),
             info: WorkspaceInfo {
@@ -138,10 +81,7 @@ impl WorkspaceDatabase {
     }
 
     pub fn validate(&self) -> Result<(), String> {
-        let connection = self
-            .connection
-            .lock()
-            .map_err(|_| "workspace database lock is poisoned".to_owned())?;
+        let connection = self.lock()?;
         let result: String = connection
             .query_row("PRAGMA quick_check", [], |row| row.get(0))
             .map_err(|source| format!("workspace database validation failed: {source}"))?;
@@ -151,266 +91,71 @@ impl WorkspaceDatabase {
         Ok(())
     }
 
-    pub fn replace_file_index(&self, files: &[IndexedFile]) -> Result<(), String> {
-        let mut connection = self
-            .connection
-            .lock()
-            .map_err(|_| "workspace database lock is poisoned".to_owned())?;
-        let transaction = connection
-            .transaction()
-            .map_err(|source| format!("cannot start file index update: {source}"))?;
-        transaction
-            .execute_batch("CREATE TEMP TABLE indexed_paths (relative_path TEXT PRIMARY KEY);")
-            .map_err(|source| format!("cannot initialize file index update: {source}"))?;
-        for file in files {
-            transaction
-                .execute(
-                    "INSERT INTO files
-                     (workspace_id, path, relative_path, extension, language, size, mtime, content_hash, indexed_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-                     ON CONFLICT(workspace_id, relative_path) DO UPDATE SET
-                         path = excluded.path, extension = excluded.extension,
-                         language = excluded.language, size = excluded.size,
-                         mtime = excluded.mtime, content_hash = excluded.content_hash,
-                         indexed_at = excluded.indexed_at",
-                    params![
-                        self.info.id,
-                        file.absolute_path,
-                        file.relative_path,
-                        file.extension,
-                        file.language,
-                        file.size,
-                        file.mtime,
-                        file.content_hash
-                    ],
-                )
-                .and_then(|_| {
-                    transaction.execute(
-                        "INSERT INTO indexed_paths (relative_path) VALUES (?1)",
-                        params![file.relative_path],
-                    )
-                })
-                .map_err(|source| format!("cannot update indexed file: {source}"))?;
-            let file_id: i64 = transaction
-                .query_row(
-                    "SELECT id FROM files WHERE workspace_id = ?1 AND relative_path = ?2",
-                    params![self.info.id, file.relative_path],
-                    |row| row.get(0),
-                )
-                .map_err(|source| format!("cannot resolve indexed file: {source}"))?;
-            transaction
-                .execute("DELETE FROM symbols WHERE file_id = ?1", params![file_id])
-                .map_err(|source| format!("cannot replace file symbols: {source}"))?;
-            let mut symbol_ids = Vec::with_capacity(file.symbols.len());
-            for symbol in &file.symbols {
-                let parent_id = symbol
-                    .parent_index
-                    .and_then(|index| symbol_ids.get(index))
-                    .copied();
-                transaction
-                    .execute(
-                        "INSERT INTO symbols
-                         (workspace_id, file_id, name, qualified_name, kind, language,
-                          start_line, start_column, end_line, end_column, parent_symbol_id, signature)
-                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-                        params![
-                            self.info.id,
-                            file_id,
-                            symbol.name,
-                            symbol.qualified_name,
-                            symbol.kind,
-                            symbol.language,
-                            symbol.start_line,
-                            symbol.start_column,
-                            symbol.end_line,
-                            symbol.end_column,
-                            parent_id,
-                            symbol.signature
-                        ],
-                    )
-                    .map_err(|source| format!("cannot store file symbol: {source}"))?;
-                symbol_ids.push(transaction.last_insert_rowid());
+    pub fn build_index(
+        &self,
+        root: &Path,
+        total_directories: u64,
+        mut progress: impl FnMut(u64, u64, &str),
+    ) -> Result<IndexStatus, String> {
+        let mut connection = self.lock()?;
+        cleanup_staging(&connection, &self.info.id)?;
+        let generation = generation_id();
+        let mut batch = Vec::<IndexedFile>::with_capacity(BATCH_FILE_LIMIT);
+        let mut batch_bytes = 0_usize;
+        let mut last_flush = Instant::now();
+        let mut completed_directories = 0_u64;
+
+        let scan_result = index::scan(root, |event| {
+            match event {
+                ScanEvent::File(file) => {
+                    batch_bytes = batch_bytes.saturating_add(file.estimated_bytes());
+                    batch.push(file);
+                    if batch.len() >= BATCH_FILE_LIMIT
+                        || batch_bytes >= BATCH_BYTE_LIMIT
+                        || last_flush.elapsed() >= BATCH_TIME_LIMIT
+                    {
+                        flush_batch(&mut connection, &self.info.id, &generation, &mut batch)?;
+                        batch_bytes = 0;
+                        last_flush = Instant::now();
+                    }
+                }
+                ScanEvent::DirectoryComplete(path) => {
+                    completed_directories = completed_directories.saturating_add(1);
+                    progress(completed_directories, total_directories, &path);
+                }
             }
+            Ok(())
+        });
+        scan_result?;
+        flush_batch(&mut connection, &self.info.id, &generation, &mut batch)?;
+        if completed_directories != total_directories {
+            return Err(format!(
+                "directory count changed during indexing: expected {total_directories}, completed {completed_directories}"
+            ));
         }
-        transaction
-            .execute(
-                "DELETE FROM files WHERE workspace_id = ?1
-                 AND relative_path NOT IN (SELECT relative_path FROM indexed_paths)",
-                params![self.info.id],
-            )
-            .and_then(|_| {
-                transaction.execute(
-                    "UPDATE workspaces SET
-                         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-                         last_indexed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-                     WHERE id = ?1",
-                    params![self.info.id],
-                )
-            })
-            .and_then(|_| {
-                transaction.execute(
-                    "UPDATE index_state SET
-                         last_scan = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-                         last_full_index = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-                         parser_version = ?2,
-                         status = 'ready'
-                     WHERE workspace_id = ?1",
-                    params![self.info.id, crate::languages::PARSER_VERSION],
-                )
-            })
-            .and_then(|_| {
-                transaction.execute("INSERT INTO symbols_fts(symbols_fts) VALUES('rebuild')", [])
-            })
-            .and_then(|_| transaction.execute("DROP TABLE indexed_paths", []))
-            .map_err(|source| format!("cannot finalize file index update: {source}"))?;
-        transaction
-            .commit()
-            .map_err(|source| format!("cannot commit file index update: {source}"))
+        publish_generation(&mut connection, &self.info.id, &generation)?;
+        read_index_status(&connection, &self.info.id)
     }
 
     pub fn index_status(&self) -> Result<IndexStatus, String> {
-        let connection = self
-            .connection
-            .lock()
-            .map_err(|_| "workspace database lock is poisoned".to_owned())?;
-        connection
-            .query_row(
-                "SELECT state.workspace_id, state.status,
-                        (SELECT count(*) FROM files WHERE workspace_id = state.workspace_id),
-                        (SELECT count(*) FROM symbols WHERE workspace_id = state.workspace_id),
-                        state.index_version, state.parser_version,
-                        state.last_scan, state.last_full_index
-                 FROM index_state AS state
-                 WHERE state.workspace_id = ?1",
-                params![self.info.id],
-                |row| {
-                    Ok(IndexStatus {
-                        workspace_id: row.get(0)?,
-                        status: row.get(1)?,
-                        indexed_files: row.get(2)?,
-                        indexed_symbols: row.get(3)?,
-                        index_version: row.get(4)?,
-                        parser_version: row.get(5)?,
-                        last_scan: row.get(6)?,
-                        last_full_index: row.get(7)?,
-                    })
-                },
-            )
-            .map_err(|source| format!("cannot read index status: {source}"))
-    }
-
-    pub fn file_fingerprints(
-        &self,
-    ) -> Result<HashMap<String, crate::index::FileFingerprint>, String> {
-        let connection = self
-            .connection
-            .lock()
-            .map_err(|_| "workspace database lock is poisoned".to_owned())?;
-        let mut statement = connection
-            .prepare("SELECT relative_path, size, mtime, content_hash FROM files WHERE workspace_id = ?1")
-            .map_err(|source| format!("cannot prepare file fingerprint query: {source}"))?;
-        let rows = statement
-            .query_map(params![self.info.id], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    crate::index::FileFingerprint {
-                        size: row.get(1)?,
-                        mtime: row.get(2)?,
-                        content_hash: row.get(3)?,
-                    },
-                ))
-            })
-            .map_err(|source| format!("cannot read file fingerprints: {source}"))?;
-        rows.map(|row| row.map_err(|source| format!("cannot read file fingerprint: {source}")))
-            .collect()
-    }
-
-    pub fn apply_incremental_index(
-        &self,
-        scan: &crate::index::IncrementalScan,
-    ) -> Result<(), String> {
-        let mut connection = self
-            .connection
-            .lock()
-            .map_err(|_| "workspace database lock is poisoned".to_owned())?;
-        let transaction = connection
-            .transaction()
-            .map_err(|source| format!("cannot start incremental index update: {source}"))?;
-        transaction
-            .execute_batch("CREATE TEMP TABLE current_paths (relative_path TEXT PRIMARY KEY);")
-            .map_err(|source| format!("cannot initialize incremental index update: {source}"))?;
-        for path in &scan.current_paths {
-            transaction
-                .execute(
-                    "INSERT INTO current_paths (relative_path) VALUES (?1)",
-                    params![path],
-                )
-                .map_err(|source| format!("cannot track current indexed path: {source}"))?;
-        }
-        for update in &scan.metadata_updates {
-            transaction
-                .execute(
-                    "UPDATE files SET path = ?3, size = ?4, mtime = ?5,
-                         indexed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-                     WHERE workspace_id = ?1 AND relative_path = ?2",
-                    params![
-                        self.info.id,
-                        update.relative_path,
-                        update.absolute_path,
-                        update.size,
-                        update.mtime
-                    ],
-                )
-                .map_err(|source| format!("cannot update unchanged file metadata: {source}"))?;
-        }
-        for file in &scan.upserts {
-            store_file(&transaction, &self.info.id, file)?;
-        }
-        let deleted = transaction
-            .execute(
-                "DELETE FROM files WHERE workspace_id = ?1
-                 AND relative_path NOT IN (SELECT relative_path FROM current_paths)",
-                params![self.info.id],
-            )
-            .map_err(|source| format!("cannot delete removed indexed files: {source}"))?;
-        transaction
-            .execute(
-                "UPDATE workspaces SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-                     last_indexed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?1",
-                params![self.info.id],
-            )
-            .and_then(|_| {
-                transaction.execute(
-                    "UPDATE index_state SET last_scan = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-                         parser_version = ?2, status = 'ready' WHERE workspace_id = ?1",
-                    params![self.info.id, crate::languages::PARSER_VERSION],
-                )
-            })
-            .map_err(|source| format!("cannot finalize incremental index state: {source}"))?;
-        if !scan.upserts.is_empty() || deleted > 0 {
-            transaction
-                .execute("INSERT INTO symbols_fts(symbols_fts) VALUES('rebuild')", [])
-                .map_err(|source| format!("cannot rebuild symbol search index: {source}"))?;
-        }
-        transaction
-            .execute("DROP TABLE current_paths", [])
-            .map_err(|source| format!("cannot finalize incremental index update: {source}"))?;
-        transaction
-            .commit()
-            .map_err(|source| format!("cannot commit incremental index update: {source}"))
+        let connection = self.lock()?;
+        read_index_status(&connection, &self.info.id)
     }
 
     pub fn search_files(&self, query: &str, limit: usize) -> Result<Vec<PathBuf>, String> {
-        let connection = self
-            .connection
-            .lock()
-            .map_err(|_| "workspace database lock is poisoned".to_owned())?;
+        let connection = self.lock()?;
         let pattern = format!("%{}%", escape_like(query));
         let mut statement = connection
             .prepare(
-                "SELECT relative_path FROM files
-                 WHERE workspace_id = ?1 AND relative_path LIKE ?2 ESCAPE '\\'
-                 ORDER BY relative_path COLLATE NOCASE LIMIT ?3",
+                "SELECT files.relative_path
+                 FROM files_v2 AS files
+                 JOIN index_state_v2 AS state
+                   ON state.workspace_id = files.workspace_id
+                  AND state.active_generation = files.generation_id
+                 WHERE files.workspace_id = ?1
+                   AND files.relative_path LIKE ?2 ESCAPE '\\'
+                 ORDER BY files.relative_path COLLATE NOCASE
+                 LIMIT ?3",
             )
             .map_err(|source| format!("cannot prepare file search: {source}"))?;
         let rows = statement
@@ -425,227 +170,122 @@ impl WorkspaceDatabase {
         .collect()
     }
 
-    pub fn search_symbols(
-        &self,
-        query: &str,
-        kind: Option<&str>,
-        language: Option<&str>,
-        path: Option<&str>,
-        limit: usize,
-    ) -> Result<SymbolSearchResponse, String> {
-        let connection = self
-            .connection
+    fn lock(&self) -> Result<std::sync::MutexGuard<'_, Connection>, String> {
+        self.connection
             .lock()
-            .map_err(|_| "workspace database lock is poisoned".to_owned())?;
-        let fts_query = format!("\"{}\"*", query.replace('"', "\"\""));
-        let path_pattern = path.map(|value| format!("%{}%", escape_like(value)));
-        let mut statement = connection
-            .prepare(
-                "SELECT symbols.name, symbols.qualified_name, symbols.kind, symbols.language,
-                        files.relative_path, symbols.start_line, symbols.start_column,
-                        CASE
-                            WHEN symbols.name = ?2 COLLATE NOCASE THEN 1.0
-                            WHEN symbols.name LIKE (?2 || '%') ESCAPE '\\' COLLATE NOCASE THEN 0.9
-                            ELSE 0.7
-                        END AS score,
-                        symbols.signature
-                 FROM symbols_fts
-                 JOIN symbols ON symbols.id = symbols_fts.rowid
-                 JOIN files ON files.id = symbols.file_id
-                 WHERE symbols_fts MATCH ?1
-                   AND symbols.workspace_id = ?3
-                   AND (?4 IS NULL OR symbols.kind = ?4 COLLATE NOCASE)
-                   AND (?5 IS NULL OR symbols.language = ?5 COLLATE NOCASE)
-                   AND (?6 IS NULL OR files.relative_path LIKE ?6 ESCAPE '\\' COLLATE NOCASE)
-                 ORDER BY score DESC, bm25(symbols_fts), symbols.name COLLATE NOCASE,
-                          files.relative_path COLLATE NOCASE, symbols.start_line
-                 LIMIT ?7",
-            )
-            .map_err(|source| format!("cannot prepare symbol search: {source}"))?;
-        let rows = statement
-            .query_map(
-                params![
-                    fts_query,
-                    query,
-                    self.info.id,
-                    kind,
-                    language,
-                    path_pattern,
-                    limit as i64
-                ],
-                |row| {
-                    Ok(SymbolSearchResult {
-                        r#type: "symbol",
-                        name: row.get(0)?,
-                        qualified_name: row.get(1)?,
-                        kind: row.get(2)?,
-                        language: row.get(3)?,
-                        path: row.get(4)?,
-                        line: row.get(5)?,
-                        column: row.get(6)?,
-                        score: row.get(7)?,
-                        signature: row.get(8)?,
-                    })
-                },
-            )
-            .map_err(|source| format!("cannot search symbols: {source}"))?;
-        let results = rows
-            .map(|row| row.map_err(|source| format!("cannot read symbol search result: {source}")))
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(SymbolSearchResponse { results })
-    }
-
-    pub fn file_outline(&self, relative_path: &str) -> Result<FileOutline, String> {
-        let connection = self
-            .connection
-            .lock()
-            .map_err(|_| "workspace database lock is poisoned".to_owned())?;
-        let file = connection
-            .query_row(
-                "SELECT id, relative_path, language FROM files
-                 WHERE workspace_id = ?1 AND relative_path = ?2",
-                params![self.info.id, relative_path],
-                |row| {
-                    Ok((
-                        row.get::<_, i64>(0)?,
-                        row.get::<_, String>(1)?,
-                        row.get::<_, Option<String>>(2)?,
-                    ))
-                },
-            )
-            .optional()
-            .map_err(|source| format!("cannot resolve outline file: {source}"))?
-            .ok_or_else(|| format!("file is not indexed: {relative_path}"))?;
-        let mut statement = connection
-            .prepare(
-                "SELECT id, parent_symbol_id, name, qualified_name, kind, language,
-                        start_line, start_column, end_line, end_column, signature
-                 FROM symbols WHERE workspace_id = ?1 AND file_id = ?2
-                 ORDER BY start_line, start_column, id",
-            )
-            .map_err(|source| format!("cannot prepare file outline: {source}"))?;
-        let rows = statement
-            .query_map(params![self.info.id, file.0], |row| {
-                Ok(StoredSymbol {
-                    id: row.get(0)?,
-                    parent_id: row.get(1)?,
-                    name: row.get(2)?,
-                    qualified_name: row.get(3)?,
-                    kind: row.get(4)?,
-                    language: row.get(5)?,
-                    start_line: row.get(6)?,
-                    start_column: row.get(7)?,
-                    end_line: row.get(8)?,
-                    end_column: row.get(9)?,
-                    signature: row.get(10)?,
-                })
-            })
-            .map_err(|source| format!("cannot read file outline: {source}"))?;
-        let stored = rows
-            .map(|row| row.map_err(|source| format!("cannot read outline symbol: {source}")))
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(FileOutline {
-            path: file.1,
-            language: file.2,
-            symbols: outline_children(&stored, None),
-        })
-    }
-
-    #[cfg(test)]
-    fn file_count(&self) -> i64 {
-        let connection = self.connection.lock().expect("database should lock");
-        connection
-            .query_row("SELECT count(*) FROM files", [], |row| row.get(0))
-            .expect("file count should be readable")
-    }
-
-    #[cfg(test)]
-    fn symbol_count(&self) -> i64 {
-        let connection = self.connection.lock().expect("database should lock");
-        connection
-            .query_row("SELECT count(*) FROM symbols", [], |row| row.get(0))
-            .expect("symbol count should be readable")
+            .map_err(|_| "workspace database lock is poisoned".to_owned())
     }
 }
 
-fn store_file(
-    transaction: &Transaction<'_>,
+fn flush_batch(
+    connection: &mut Connection,
     workspace_id: &str,
-    file: &IndexedFile,
+    generation: &str,
+    batch: &mut Vec<IndexedFile>,
 ) -> Result<(), String> {
-    transaction
-        .execute(
-            "INSERT INTO files
-             (workspace_id, path, relative_path, extension, language, size, mtime, content_hash, indexed_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-             ON CONFLICT(workspace_id, relative_path) DO UPDATE SET
-                 path = excluded.path, extension = excluded.extension, language = excluded.language,
-                 size = excluded.size, mtime = excluded.mtime, content_hash = excluded.content_hash,
-                 indexed_at = excluded.indexed_at",
-            params![workspace_id, file.absolute_path, file.relative_path, file.extension,
-                file.language, file.size, file.mtime, file.content_hash],
-        )
-        .map_err(|source| format!("cannot update indexed file: {source}"))?;
-    let file_id: i64 = transaction
-        .query_row(
-            "SELECT id FROM files WHERE workspace_id = ?1 AND relative_path = ?2",
-            params![workspace_id, file.relative_path],
-            |row| row.get(0),
-        )
-        .map_err(|source| format!("cannot resolve indexed file: {source}"))?;
-    transaction
-        .execute("DELETE FROM symbols WHERE file_id = ?1", params![file_id])
-        .map_err(|source| format!("cannot replace file symbols: {source}"))?;
-    let mut symbol_ids = Vec::with_capacity(file.symbols.len());
-    for symbol in &file.symbols {
-        let parent_id = symbol
-            .parent_index
-            .and_then(|index| symbol_ids.get(index))
-            .copied();
-        transaction
-            .execute(
-                "INSERT INTO symbols
-                 (workspace_id, file_id, name, qualified_name, kind, language,
-                  start_line, start_column, end_line, end_column, parent_symbol_id, signature)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-                params![
-                    workspace_id,
-                    file_id,
-                    symbol.name,
-                    symbol.qualified_name,
-                    symbol.kind,
-                    symbol.language,
-                    symbol.start_line,
-                    symbol.start_column,
-                    symbol.end_line,
-                    symbol.end_column,
-                    parent_id,
-                    symbol.signature
-                ],
-            )
-            .map_err(|source| format!("cannot store file symbol: {source}"))?;
-        symbol_ids.push(transaction.last_insert_rowid());
+    if batch.is_empty() {
+        return Ok(());
     }
+    let transaction = connection
+        .transaction()
+        .map_err(|source| format!("cannot start index batch: {source}"))?;
+    {
+        let mut statement = transaction
+            .prepare_cached(
+                "INSERT INTO files_v2
+                 (workspace_id, generation_id, path, relative_path, file_name, extension,
+                  size, mtime, indexed_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
+                         strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+            )
+            .map_err(|source| format!("cannot prepare index batch: {source}"))?;
+        for file in batch.iter() {
+            statement
+                .execute(params![
+                    workspace_id,
+                    generation,
+                    file.absolute_path,
+                    file.relative_path,
+                    file.file_name,
+                    file.extension,
+                    file.size,
+                    file.mtime
+                ])
+                .map_err(|source| format!("cannot write index batch: {source}"))?;
+        }
+    }
+    transaction
+        .commit()
+        .map_err(|source| format!("cannot commit index batch: {source}"))?;
+    batch.clear();
     Ok(())
 }
 
-fn outline_children(symbols: &[StoredSymbol], parent_id: Option<i64>) -> Vec<OutlineSymbol> {
-    symbols
-        .iter()
-        .filter(|symbol| symbol.parent_id == parent_id)
-        .map(|symbol| OutlineSymbol {
-            name: symbol.name.clone(),
-            qualified_name: symbol.qualified_name.clone(),
-            kind: symbol.kind.clone(),
-            language: symbol.language.clone(),
-            start_line: symbol.start_line,
-            start_column: symbol.start_column,
-            end_line: symbol.end_line,
-            end_column: symbol.end_column,
-            signature: symbol.signature.clone(),
-            children: outline_children(symbols, Some(symbol.id)),
+fn publish_generation(
+    connection: &mut Connection,
+    workspace_id: &str,
+    generation: &str,
+) -> Result<(), String> {
+    let transaction = connection
+        .transaction()
+        .map_err(|source| format!("cannot start index publication: {source}"))?;
+    transaction
+        .execute(
+            "UPDATE index_state_v2 SET active_generation = ?2, status = 'ready',
+                 index_version = index_version + 1,
+                 last_scan = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                 last_full_index = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+             WHERE workspace_id = ?1",
+            params![workspace_id, generation],
+        )
+        .and_then(|_| {
+            transaction.execute(
+                "UPDATE workspaces SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                     last_indexed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?1",
+                params![workspace_id],
+            )
         })
-        .collect()
+        .map_err(|source| format!("cannot publish index: {source}"))?;
+    transaction
+        .commit()
+        .map_err(|source| format!("cannot commit index publication: {source}"))
+}
+
+fn cleanup_staging(connection: &Connection, workspace_id: &str) -> Result<(), String> {
+    connection
+        .execute(
+            "DELETE FROM files_v2
+             WHERE workspace_id = ?1
+               AND generation_id <> COALESCE(
+                   (SELECT active_generation FROM index_state_v2 WHERE workspace_id = ?1), '')",
+            params![workspace_id],
+        )
+        .map(|_| ())
+        .map_err(|source| format!("cannot remove incomplete index data: {source}"))
+}
+
+fn read_index_status(connection: &Connection, workspace_id: &str) -> Result<IndexStatus, String> {
+    connection
+        .query_row(
+            "SELECT state.workspace_id, state.status,
+                    (SELECT count(*) FROM files_v2 AS files
+                     WHERE files.workspace_id = state.workspace_id
+                       AND files.generation_id = state.active_generation),
+                    state.index_version, state.last_scan, state.last_full_index
+             FROM index_state_v2 AS state WHERE state.workspace_id = ?1",
+            params![workspace_id],
+            |row| {
+                Ok(IndexStatus {
+                    workspace_id: row.get(0)?,
+                    status: row.get(1)?,
+                    indexed_files: row.get(2)?,
+                    index_version: row.get(3)?,
+                    last_scan: row.get(4)?,
+                    last_full_index: row.get(5)?,
+                })
+            },
+        )
+        .map_err(|source| format!("cannot read index status: {source}"))
 }
 
 pub fn sqlite_diagnostics() -> Result<SqliteDiagnostics, String> {
@@ -657,26 +297,10 @@ pub fn sqlite_diagnostics() -> Result<SqliteDiagnostics, String> {
     let quick_check = connection
         .query_row("PRAGMA quick_check", [], |row| row.get(0))
         .map_err(|source| format!("SQLite quick_check failed: {source}"))?;
-    let fts5_enabled = connection
-        .query_row(
-            "SELECT sqlite_compileoption_used('ENABLE_FTS5')",
-            [],
-            |row| row.get::<_, i64>(0),
-        )
-        .map(|value| value == 1)
-        .map_err(|source| format!("cannot read SQLite FTS5 support: {source}"))?;
     Ok(SqliteDiagnostics {
         version,
         quick_check,
-        fts5_enabled,
     })
-}
-
-fn escape_like(value: &str) -> String {
-    value
-        .replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_")
 }
 
 fn configure(connection: &Connection) -> Result<(), String> {
@@ -684,7 +308,9 @@ fn configure(connection: &Connection) -> Result<(), String> {
         .pragma_update(None, "journal_mode", "WAL")
         .and_then(|()| connection.pragma_update(None, "synchronous", "NORMAL"))
         .and_then(|()| connection.pragma_update(None, "foreign_keys", "ON"))
-        .and_then(|()| connection.pragma_update(None, "temp_store", "MEMORY"))
+        .and_then(|()| connection.pragma_update(None, "temp_store", "FILE"))
+        .and_then(|()| connection.pragma_update(None, "cache_size", -65_536_i64))
+        .and_then(|()| connection.pragma_update(None, "mmap_size", 0_i64))
         .map_err(|source| format!("cannot configure workspace database: {source}"))
 }
 
@@ -697,16 +323,12 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
             "workspace database schema {current_version} is newer than supported {SCHEMA_VERSION}"
         ));
     }
-    if current_version == SCHEMA_VERSION {
-        return Ok(());
-    }
-
     let transaction = connection
         .transaction()
         .map_err(|source| format!("cannot start schema migration: {source}"))?;
     transaction
         .execute_batch(
-            "CREATE TABLE workspaces (
+            "CREATE TABLE IF NOT EXISTS workspaces (
                 id TEXT PRIMARY KEY,
                 path TEXT NOT NULL UNIQUE,
                 name TEXT NOT NULL,
@@ -714,66 +336,29 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
                 updated_at TEXT NOT NULL,
                 last_indexed_at TEXT
             );
-            CREATE TABLE files (
-                id INTEGER PRIMARY KEY,
-                workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-                path TEXT NOT NULL,
-                relative_path TEXT NOT NULL,
-                extension TEXT,
-                language TEXT,
-                size INTEGER NOT NULL,
-                mtime INTEGER NOT NULL,
-                content_hash TEXT,
-                indexed_at TEXT,
-                UNIQUE(workspace_id, relative_path)
-            );
-            CREATE INDEX files_workspace_relative_path ON files(workspace_id, relative_path);
-            CREATE INDEX files_workspace_extension ON files(workspace_id, extension);
-            CREATE INDEX files_workspace_language ON files(workspace_id, language);
-            CREATE INDEX files_workspace_mtime ON files(workspace_id, mtime);
-            CREATE TABLE symbols (
-                id INTEGER PRIMARY KEY,
-                workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-                file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
-                name TEXT NOT NULL,
-                qualified_name TEXT,
-                kind TEXT NOT NULL,
-                language TEXT NOT NULL,
-                start_line INTEGER NOT NULL,
-                start_column INTEGER NOT NULL,
-                end_line INTEGER NOT NULL,
-                end_column INTEGER NOT NULL,
-                parent_symbol_id INTEGER REFERENCES symbols(id) ON DELETE SET NULL,
-                signature TEXT
-            );
-            CREATE VIRTUAL TABLE symbols_fts USING fts5(name, qualified_name, signature, content='symbols', content_rowid='id');
-            CREATE TABLE symbol_references (
-                id INTEGER PRIMARY KEY,
-                workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-                file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
-                symbol_id INTEGER REFERENCES symbols(id) ON DELETE SET NULL,
-                target_name TEXT NOT NULL,
-                reference_kind TEXT,
-                line INTEGER NOT NULL,
-                column_number INTEGER NOT NULL
-            );
-            CREATE TABLE dependencies (
-                id INTEGER PRIMARY KEY,
-                workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-                source_file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
-                target TEXT NOT NULL,
-                dependency_type TEXT NOT NULL,
-                line INTEGER NOT NULL
-            );
-            CREATE TABLE index_state (
+            CREATE TABLE IF NOT EXISTS index_state_v2 (
                 workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+                active_generation TEXT,
                 index_version INTEGER NOT NULL,
-                parser_version TEXT,
                 last_scan TEXT,
                 last_full_index TEXT,
                 status TEXT NOT NULL
             );
-            PRAGMA user_version = 1;",
+            CREATE TABLE IF NOT EXISTS files_v2 (
+                workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+                generation_id TEXT NOT NULL,
+                path TEXT NOT NULL,
+                relative_path TEXT NOT NULL,
+                file_name TEXT NOT NULL,
+                extension TEXT,
+                size INTEGER NOT NULL,
+                mtime INTEGER NOT NULL,
+                indexed_at TEXT NOT NULL,
+                PRIMARY KEY(workspace_id, generation_id, relative_path)
+            );
+            CREATE INDEX IF NOT EXISTS files_v2_search
+                ON files_v2(workspace_id, generation_id, relative_path COLLATE NOCASE);
+            PRAGMA user_version = 2;",
         )
         .map_err(|source| format!("schema migration failed: {source}"))?;
     transaction
@@ -790,20 +375,35 @@ fn register_workspace(
     connection
         .execute(
             "INSERT INTO workspaces (id, path, name, created_at, updated_at)
-             VALUES (?1, ?2, ?3, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+             VALUES (?1, ?2, ?3, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
              ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name,
                  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
             params![id, path, name],
         )
         .and_then(|_| {
             connection.execute(
-                "INSERT INTO index_state (workspace_id, index_version, status)
-                 VALUES (?1, 1, 'not_indexed') ON CONFLICT(workspace_id) DO NOTHING",
+                "INSERT INTO index_state_v2 (workspace_id, index_version, status)
+                 VALUES (?1, 0, 'not_indexed') ON CONFLICT(workspace_id) DO NOTHING",
                 params![id],
             )
         })
         .map(|_| ())
         .map_err(|source| format!("cannot register workspace: {source}"))
+}
+
+fn escape_like(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
+fn generation_id() -> String {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |value| value.as_nanos());
+    format!("{}-{nanos}", std::process::id())
 }
 
 fn platform_data_root() -> Result<PathBuf, String> {
@@ -860,156 +460,63 @@ fn workspace_id(normalized_path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::WorkspaceDatabase;
-    use crate::index;
     use std::fs;
-    use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
-    fn open_at_creates_schema_and_registers_workspace() {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time should be valid")
-            .as_nanos();
-        let test_root =
-            std::env::temp_dir().join(format!("shiori-db-test-{}-{unique}", std::process::id()));
+    fn build_index_streams_metadata_and_publishes_results() {
+        let test_root = temporary_root();
         let workspace = test_root.join("workspace");
         let data = test_root.join("data");
-        fs::create_dir_all(&workspace).expect("workspace should be created");
-
+        fs::create_dir_all(workspace.join("src")).expect("workspace should be created");
+        fs::write(workspace.join("src").join("main.rs"), "fn main() {}")
+            .expect("source file should be written");
         let database = WorkspaceDatabase::open_at(&workspace, &data).expect("database should open");
+        let mut progress = Vec::new();
 
-        assert_eq!(database.info().schema_version, 1);
-        assert!(database.info().database_path.ends_with("shiori.db"));
-        database.validate().expect("database should be valid");
-        let connection = database.connection.lock().expect("database should lock");
-        let journal_mode: String = connection
-            .pragma_query_value(None, "journal_mode", |row| row.get(0))
-            .expect("journal mode should be readable");
-        let foreign_keys: i64 = connection
-            .pragma_query_value(None, "foreign_keys", |row| row.get(0))
-            .expect("foreign key setting should be readable");
-        let table_count: i64 = connection
-            .query_row(
-                "SELECT count(*) FROM sqlite_master WHERE type IN ('table', 'view')",
-                [],
-                |row| row.get(0),
-            )
-            .expect("schema should be readable");
-        assert_eq!(journal_mode, "wal");
-        assert_eq!(foreign_keys, 1);
-        assert!(table_count >= 8);
-        drop(connection);
+        let status = database
+            .build_index(&workspace, 2, |completed, total, path| {
+                progress.push((completed, total, path.to_owned()));
+            })
+            .expect("index should build");
+        let results = database
+            .search_files("main", 20)
+            .expect("index should search");
+
+        assert_eq!(status.status, "ready");
+        assert_eq!(status.indexed_files, 1);
+        assert_eq!(progress.len(), 2);
+        assert_eq!(results, [std::path::PathBuf::from("src/main.rs")]);
         drop(database);
         fs::remove_dir_all(test_root).expect("test directory should be removed");
     }
 
     #[test]
-    fn replace_file_index_persists_current_workspace_files() {
+    fn build_index_more_than_one_batch_publishes_every_file() {
+        let test_root = temporary_root();
+        let workspace = test_root.join("workspace");
+        let data = test_root.join("data");
+        fs::create_dir_all(&workspace).expect("workspace should be created");
+        for index in 0..1_005 {
+            fs::write(workspace.join(format!("file-{index:04}.txt")), [])
+                .expect("test file should be written");
+        }
+        let database = WorkspaceDatabase::open_at(&workspace, &data).expect("database should open");
+
+        let status = database
+            .build_index(&workspace, 1, |_, _, _| {})
+            .expect("multi-batch index should build");
+
+        assert_eq!(status.indexed_files, 1_005);
+        drop(database);
+        fs::remove_dir_all(test_root).expect("test directory should be removed");
+    }
+
+    fn temporary_root() -> std::path::PathBuf {
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system time should be valid")
             .as_nanos();
-        let test_root = std::env::temp_dir().join(format!(
-            "shiori-db-index-test-{}-{unique}",
-            std::process::id()
-        ));
-        let workspace = test_root.join("workspace");
-        let data = test_root.join("data");
-        fs::create_dir_all(&workspace).expect("workspace should be created");
-        fs::write(workspace.join("sample.rs"), "fn sample() {}").expect("sample should be written");
-        let database = WorkspaceDatabase::open_at(&workspace, &data).expect("database should open");
-
-        let initial_status = database.index_status().expect("status should be readable");
-        assert_eq!(initial_status.status, "not_indexed");
-        assert_eq!(initial_status.indexed_files, 0);
-        assert_eq!(initial_status.indexed_symbols, 0);
-
-        database
-            .replace_file_index(&index::scan(&workspace).expect("workspace should scan"))
-            .expect("file index should be stored");
-
-        assert_eq!(database.file_count(), 1);
-        assert_eq!(database.symbol_count(), 1);
-        let outline = database
-            .file_outline("sample.rs")
-            .expect("outline should be readable");
-        assert_eq!(outline.language.as_deref(), Some("rust"));
-        assert_eq!(outline.symbols.len(), 1);
-        assert_eq!(outline.symbols[0].name, "sample");
-        assert_eq!(outline.symbols[0].kind, "function");
-        let symbols = database
-            .search_symbols("sam", None, None, Some("sample"), 10)
-            .expect("symbol search should succeed");
-        assert_eq!(symbols.results.len(), 1);
-        assert_eq!(symbols.results[0].name, "sample");
-        assert_eq!(symbols.results[0].language, "rust");
-        assert_eq!(symbols.results[0].score, 0.9);
-        assert!(
-            database
-                .search_symbols("sample", Some("method"), None, None, 10)
-                .expect("filtered symbol search should succeed")
-                .results
-                .is_empty()
-        );
-        let ready_status = database.index_status().expect("status should be readable");
-        assert_eq!(ready_status.status, "ready");
-        assert_eq!(ready_status.indexed_files, 1);
-        assert_eq!(ready_status.indexed_symbols, 1);
-        assert_eq!(
-            ready_status.parser_version.as_deref(),
-            Some(crate::languages::PARSER_VERSION)
-        );
-        assert!(ready_status.last_full_index.is_some());
-        assert_eq!(
-            database
-                .search_files("sample", 10)
-                .expect("search should succeed"),
-            vec![PathBuf::from("sample.rs")]
-        );
-
-        let unchanged = index::scan_incremental(
-            &workspace,
-            &database
-                .file_fingerprints()
-                .expect("fingerprints should be readable"),
-        )
-        .expect("unchanged workspace should scan");
-        assert!(unchanged.upserts.is_empty());
-        assert!(unchanged.metadata_updates.is_empty());
-
-        fs::write(workspace.join("sample.rs"), "fn changed_symbol() {}")
-            .expect("sample should change");
-        let changed = index::scan_incremental(
-            &workspace,
-            &database
-                .file_fingerprints()
-                .expect("fingerprints should be readable"),
-        )
-        .expect("changed workspace should scan");
-        assert_eq!(changed.upserts.len(), 1);
-        database
-            .apply_incremental_index(&changed)
-            .expect("incremental update should be stored");
-        let changed_outline = database
-            .file_outline("sample.rs")
-            .expect("changed outline should exist");
-        assert_eq!(changed_outline.symbols[0].name, "changed_symbol");
-
-        fs::remove_file(workspace.join("sample.rs")).expect("sample should be removed");
-        let deleted = index::scan_incremental(
-            &workspace,
-            &database
-                .file_fingerprints()
-                .expect("fingerprints should be readable"),
-        )
-        .expect("deleted workspace should scan");
-        database
-            .apply_incremental_index(&deleted)
-            .expect("deletion should be stored");
-        assert_eq!(database.file_count(), 0);
-        assert_eq!(database.symbol_count(), 0);
-        drop(database);
-        fs::remove_dir_all(test_root).expect("test directory should be removed");
+        std::env::temp_dir().join(format!("shiori-db-test-{}-{unique}", std::process::id()))
     }
 }
