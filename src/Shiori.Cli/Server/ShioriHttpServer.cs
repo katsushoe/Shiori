@@ -83,11 +83,6 @@ internal static class ShioriHttpServer
 
     private static string[] ValidateRegisteredWorkspaces(IReadOnlyList<Shiori.Core.Engine.WorkspaceInfo> workspaces)
     {
-        if (workspaces.Count == 0)
-        {
-            throw new InvalidOperationException("At least one workspace must be registered with 'shiori workspace add'.");
-        }
-
         foreach (var workspace in workspaces)
         {
             if (!Path.IsPathFullyQualified(workspace.Path) || !Directory.Exists(workspace.Path))
