@@ -4,6 +4,13 @@ All notable changes to Shiori are documented in this file.
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-08-23
+
+### Changed
+
+- Changed MCP workspace registration on Windows to launch the initial index in
+  Windows Terminal so progress remains visible to the local user.
+
 ## [2.3.0] - 2026-08-23
 
 ### Added

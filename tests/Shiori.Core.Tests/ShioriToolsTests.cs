@@ -47,4 +47,25 @@ public sealed class ShioriToolsTests
             CodexConfigGenerator.Generate(41234, "test-server"),
             ShioriTools.GenerateCodexConfig(41234, "test-server"));
     }
+
+    [Fact]
+    public void WindowsTerminalIndexLauncher_WhenCreated_PreservesExecutableAndWorkspaceArguments()
+    {
+        var startInfo = WindowsTerminalIndexLauncher.CreateStartInfo(
+            @"C:\Users\test\AppData\Local\Microsoft\WindowsApps\wt.exe",
+            @"C:\Program Files\Shiori\shiori.exe",
+            @"F:\folder with spaces");
+
+        Assert.Equal(
+            @"C:\Users\test\AppData\Local\Microsoft\WindowsApps\wt.exe",
+            startInfo.FileName);
+        Assert.False(startInfo.UseShellExecute);
+        Assert.Equal(
+            [
+                "new-tab", "--title", @"Shiori index: F:\folder with spaces",
+                @"C:\Program Files\Shiori\shiori.exe", "index", "rebuild", "--allow",
+                @"F:\folder with spaces",
+            ],
+            startInfo.ArgumentList);
+    }
 }

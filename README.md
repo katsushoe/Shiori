@@ -7,7 +7,7 @@ indexes file names, paths, and metadata without opening file contents.
 The server exposes a single Streamable HTTP MCP endpoint and keeps every
 workspace index isolated by workspace ID in one SQLite database.
 
-Product version: `2.3.0`.
+Product version: `2.3.1`.
 
 ## Getting Started
 
@@ -20,7 +20,7 @@ Product version: `2.3.0`.
 
 ### Windows installer
 
-Download `shiori-v2.3.0-win-x64-setup.msi` from the
+Download `shiori-v2.3.1-win-x64-setup.msi` from the
 [latest release](https://github.com/katsushoe/Shiori/releases/latest), run it,
 and keep **Add Shiori to the current user's PATH** selected. The installer is
 self-contained, installs only for the current user, and uses `bin`, `config`,
@@ -36,14 +36,14 @@ shiori doctor
 
 ### ZIP binary
 
-Download `shiori-v2.3.0-win-x64.zip` from the latest release, verify the adjacent
+Download `shiori-v2.3.1-win-x64.zip` from the latest release, verify the adjacent
 SHA-256 file, extract it to a permanent installation root, and add its `bin`
 directory to your user `PATH`. The ZIP contains the same standard directory
 layout as the installer and does not require a separate .NET installation.
 
 ```powershell
-$expected = (Get-Content .\shiori-v2.3.0-win-x64.zip.sha256).Split()[0]
-$actual = (Get-FileHash .\shiori-v2.3.0-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+$expected = (Get-Content .\shiori-v2.3.1-win-x64.zip.sha256).Split()[0]
+$actual = (Get-FileHash .\shiori-v2.3.1-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($actual -ne $expected) { throw "Checksum mismatch" }
 ```
 
@@ -60,7 +60,7 @@ cargo build --release --manifest-path .\native\shiori-engine\Cargo.toml
 dotnet restore .\Shiori.slnx
 dotnet build .\Shiori.slnx --configuration Release --no-restore
 dotnet test .\tests\Shiori.Core.Tests\Shiori.Core.Tests.csproj --configuration Release --no-build
-.\scripts\Publish-Windows.ps1 -Version 2.3.0
+.\scripts\Publish-Windows.ps1 -Version 2.3.1
 ```
 
 The publish script writes the installer, ZIP, and checksum files to
@@ -118,8 +118,10 @@ no registered workspaces; workspace listing and health checks remain available,
 while searches return no results until a workspace is registered.
 
 Authenticated MCP clients can also add or remove workspaces, build indexes,
-run diagnostics, and generate client configuration. Protect the bearer token:
-adding a workspace expands the server's local filesystem access boundary.
+run diagnostics, and generate client configuration. On Windows, adding a workspace
+through MCP makes the MCP server directly open Windows Terminal to display indexing
+progress. Protect the bearer token: adding a workspace expands the server's local
+filesystem access boundary.
 
 ## Documentation
 
