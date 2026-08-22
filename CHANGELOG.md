@@ -4,6 +4,13 @@ All notable changes to Shiori are documented in this file.
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-08-22
+
+### Changed
+
+- Changed `workspace add` to automatically rebuild the workspace index while
+  displaying directory-level progress in the console.
+
 ## [1.2.0] - 2026-08-21
 
 ### Added
