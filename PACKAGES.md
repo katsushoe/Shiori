@@ -31,7 +31,9 @@ truth; credentials and authenticated feed URLs must not be committed.
 
 | Project | Package | Version | Source | Purpose | Update policy |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| `Shiori.Cli` | `Microsoft.Data.Sqlite` | `10.0.10` | NuGet | Unified database management and migration | Align with supported .NET servicing |
 | `Shiori.Cli` | `ModelContextProtocol.AspNetCore` | `2.0.0` | NuGet | Streamable HTTP MCP server | Review MCP compatibility before updating |
+| `Shiori.Cli` | `SQLitePCLRaw.bundle_e_sqlite3` | `2.1.13` | NuGet | Patched native SQLite bundle | Pin above vulnerable 2.1.11 |
 | `Shiori.Core.Tests` | `Microsoft.NET.Test.Sdk` | `18.0.1` | NuGet | .NET test host | Update with the supported SDK |
 | `Shiori.Core.Tests` | `xunit` | `2.9.3` | NuGet | Test framework | Update with runner compatibility |
 | `Shiori.Core.Tests` | `xunit.runner.visualstudio` | `3.1.4` | NuGet | Test discovery | Keep private and align with `xunit` |

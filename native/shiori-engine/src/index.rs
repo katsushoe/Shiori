@@ -1,5 +1,6 @@
 use ignore::overrides::OverrideBuilder;
 use ignore::{DirEntry, WalkBuilder};
+use std::collections::HashSet;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 
@@ -46,7 +47,7 @@ impl IndexedFile {
 
 pub fn count_directories(root: &Path) -> Result<u64, String> {
     let mut count = 0_u64;
-    for entry in walker(root)?.build() {
+    for entry in walker(root, HashSet::new())?.build() {
         let entry = entry.map_err(|source| format!("cannot scan workspace: {source}"))?;
         if entry.file_type().is_some_and(|value| value.is_dir()) {
             count = count.saturating_add(1);
@@ -57,10 +58,11 @@ pub fn count_directories(root: &Path) -> Result<u64, String> {
 
 pub fn scan(
     root: &Path,
+    completed_directories: &HashSet<String>,
     mut on_event: impl FnMut(ScanEvent) -> Result<(), String>,
 ) -> Result<(), String> {
     let mut directories = Vec::<(usize, String)>::new();
-    for entry in walker(root)?.build() {
+    for entry in walker(root, completed_directories.clone())?.build() {
         let entry = entry.map_err(|source| format!("cannot scan workspace: {source}"))?;
         let depth = entry.depth();
         complete_directories(&mut directories, depth, &mut on_event)?;
@@ -114,8 +116,9 @@ fn complete_directories(
     Ok(())
 }
 
-fn walker(root: &Path) -> Result<WalkBuilder, String> {
+fn walker(root: &Path, completed_directories: HashSet<String>) -> Result<WalkBuilder, String> {
     let mut builder = WalkBuilder::new(root);
+    let scan_root = root.to_path_buf();
     builder
         .follow_links(false)
         .hidden(false)
@@ -124,7 +127,11 @@ fn walker(root: &Path) -> Result<WalkBuilder, String> {
         .git_exclude(true)
         .require_git(false)
         .parents(true)
-        .filter_entry(|entry| !is_excluded(entry));
+        .filter_entry(move |entry| {
+            !is_excluded(entry)
+                && relative_path(&scan_root, entry.path())
+                    .is_ok_and(|path| !completed_directories.contains(&path))
+        });
 
     let configured = std::env::var("SHIORI_EXCLUDE_PATTERNS").unwrap_or_default();
     let patterns = configured
@@ -184,6 +191,7 @@ fn normalize_path(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::{ScanEvent, count_directories, scan};
+    use std::collections::HashSet;
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -200,7 +208,7 @@ mod tests {
         let count = count_directories(&root).expect("directories should be counted");
         let mut files = Vec::new();
         let mut directories = Vec::new();
-        scan(&root, |event| {
+        scan(&root, &HashSet::new(), |event| {
             match event {
                 ScanEvent::File(file) => files.push(file.relative_path),
                 ScanEvent::DirectoryComplete(path) => directories.push(path),

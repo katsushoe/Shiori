@@ -5,6 +5,15 @@ internal static class InstallationLayout
 {
     internal const string DataHomeVariable = "SHIORI_DATA_HOME";
 
+    /// <summary>Aligns native and managed storage with the resolved data directory.</summary>
+    internal static void ApplyDataDirectory()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(DataHomeVariable)))
+        {
+            Environment.SetEnvironmentVariable(DataHomeVariable, GetDataDirectory());
+        }
+    }
+
     /// <summary>Gets the installation root for the current executable layout.</summary>
     internal static string GetInstallRoot(string? baseDirectory = null)
     {

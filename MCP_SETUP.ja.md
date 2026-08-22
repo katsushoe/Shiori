@@ -27,18 +27,19 @@
 
 ## 認証と環境設定
 
-32文字以上のベアラートークンを作成し、ワークスペースルートを許可します。
-Windowsでは複数のパスを`;`で区切ります。
+32文字以上のベアラートークンを作成し、MCPからアクセスできるワークスペース
+ルートを登録します。
 
 ```powershell
 $env:SHIORI_MCP_TOKEN = ([guid]::NewGuid().ToString('N'))
-$env:SHIORI_ALLOWED_WORKSPACES = 'F:\Projects\One;F:\Projects\Two'
+shiori workspace add F:\Projects\One
+shiori workspace add F:\Projects\Two
 shiori doctor
 ```
 
 クライアントとサーバーのプロセスには同じトークンを設定してください。トークンを
-コミット対象の設定ファイルへ書かないでください。`workspace add`はMCPアクセスを
-許可せず、サーバー境界は`SHIORI_ALLOWED_WORKSPACES`だけで決まります。
+コミット対象の設定ファイルへ書かないでください。中央`Workspaces`テーブルが
+サーバー境界を定義します。
 
 ## サーバー起動
 
@@ -52,8 +53,8 @@ shiori serve --port 39473
 
 ## クライアント登録
 
-クライアント登録はShioriを検出できる範囲を制御しますが、ファイルアクセスを
-許可しません。サーバー側の認可境界は`SHIORI_ALLOWED_WORKSPACES`です。
+クライアント登録はShioriを検出できる範囲を制御します。ファイルアクセスは
+`shiori workspace add`で登録したワークスペースだけに制限されます。
 
 ### Claude Code（推奨）
 
@@ -124,17 +125,18 @@ Codexを再起動するか新しいタスクを開始します。
 
 ## 複数ワークスペース
 
-許可したワークスペースごとに永続SQLiteインデックスを作成します。
+各ワークスペースを登録します。すべてのインデックスは統合SQLiteデータベースへ
+保存されます。
 
 ```powershell
-shiori index build --allow F:\Projects\One
-shiori index build --allow F:\Projects\Two
+shiori workspace add F:\Projects\One
+shiori workspace add F:\Projects\Two
 ```
 
 ファイルインデックスの更新が必要なときはCLIを再実行します。MCPツールは
 読み取り専用であり、インデックス処理を開始しません。
 クライアントスコープとワークスペース認可は独立しており、登録済みクライアントも
-`SHIORI_ALLOWED_WORKSPACES`にないパスへはアクセスできません。
+中央`Workspaces`テーブルにないパスへはアクセスできません。
 
 ## 接続確認
 
@@ -161,8 +163,8 @@ shiori index build --allow F:\Projects\Two
 
 ### ワークスペースが拒否または未検出
 
-`SHIORI_ALLOWED_WORKSPACES`へ存在する絶対パスを設定し、Windowsでは`;`で区切ります。
-変更後はサーバーを再起動します。CLIの登録はMCPアクセスを許可しません。
+`shiori workspace add <パス>`で存在する絶対ディレクトリを登録し、サーバーを
+再起動します。認可対象は`shiori workspace list`で確認できます。
 
 ### 接続拒否
 
