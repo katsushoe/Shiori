@@ -22,4 +22,19 @@ public sealed class NativeEngineRegistryTests
         Assert.Throws<UnauthorizedAccessException>(() =>
             registry.ResolveWorkspacePaths([Path.GetTempPath()]));
     }
+
+    [Fact]
+    public void LiveAccessBoundary_AllowsAndDisallowsWorkspace()
+    {
+        var workspace = Path.GetFullPath(Path.GetTempPath());
+        using var registry = new NativeEngineRegistry([]);
+
+        registry.AllowWorkspace(workspace);
+        Assert.Equal([workspace], registry.ResolveWorkspacePaths(null));
+
+        registry.DisallowWorkspace(workspace);
+        Assert.Empty(registry.ResolveWorkspacePaths(null));
+        Assert.Throws<UnauthorizedAccessException>(() =>
+            registry.ResolveWorkspacePaths([workspace]));
+    }
 }

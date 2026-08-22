@@ -61,6 +61,17 @@ If a name matches multiple migrated workspaces, use the workspace ID or absolute
 - `workspace_list`: lists allowed workspaces and their databases.
 - `index_status`: returns one allowed workspace's index state.
 - `search_files`: searches one, several, or all allowed workspaces.
+- `workspace_add`: registers a directory, adds it to the live access boundary,
+  and builds its initial index.
+- `workspace_remove`: removes a workspace and its index rows from the live server.
+- `index_build`: builds and atomically publishes a workspace index.
+- `index_rebuild`: rebuilds and atomically replaces a workspace index.
+- `doctor`: returns native, SQLite, directory, settings, token, and workspace checks.
+- `config_claude`: generates Claude Code MCP configuration.
+- `config_codex`: generates Codex MCP configuration.
 
-MCP tools are read-only. Index builds are explicit CLI operations so progress
-is visible in a console.
+The four lookup tools and the three diagnostics/configuration tools are
+read-only. Workspace and index management tools modify local SQLite state and
+require the same bearer token as every MCP request. Keep that token restricted:
+`workspace_add` can expand the server's filesystem access boundary. `serve`
+remains CLI-only because it starts the MCP host itself.
