@@ -4,6 +4,13 @@ All notable changes to Shiori are documented in this file.
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-08-22
+
+### Added
+
+- Added persistent directory checkpoints and automatic background resumption
+  of interrupted index generations when the server restarts.
+
 ### Changed
 
 - Replaced environment-variable workspace authorization, the JSON registry,
