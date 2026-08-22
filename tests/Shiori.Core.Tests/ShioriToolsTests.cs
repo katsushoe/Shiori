@@ -8,6 +8,16 @@ namespace Shiori.Core.Tests;
 
 public sealed class ShioriToolsTests
 {
+    [Theory]
+    [InlineData(@"\\?\F:\workspace\file.txt", @"F:\workspace\file.txt")]
+    [InlineData(@"\\?\UNC\server\share\file.txt", @"\\server\share\file.txt")]
+    public void IndexPathFormatter_WithExtendedWindowsPath_ReturnsDisplayPath(
+        string path,
+        string expected)
+    {
+        Assert.Equal(expected, Shiori.Cli.IndexPathFormatter.FormatAbsolute(path));
+    }
+
     [Fact]
     public void ToolDeclarations_ContainCliEquivalentOperations()
     {

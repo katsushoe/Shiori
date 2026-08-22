@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using Shiori.Cli;
 using Shiori.Cli.Server;
@@ -109,39 +108,31 @@ static async Task<int> RunIndexAsync(string[] arguments)
         throw new ArgumentException(CliText.Format("UnknownIndexCommand", arguments[0]));
     }
 
-    Console.WriteLine(CliText.Get("IndexCounting"));
+    Console.WriteLine(CliText.Format("IndexStart", workspace));
     var totalDirectories = engine.CountIndexDirectories();
-    Console.WriteLine(CliText.Format("IndexDirectoryCount", totalDirectories));
-    var stopwatch = Stopwatch.StartNew();
-    var status = engine.BuildIndex(totalDirectories, WriteProgress);
-    stopwatch.Stop();
-    if (!Console.IsOutputRedirected)
+    IndexStatus status;
+    try
     {
-        Console.WriteLine();
+        status = engine.BuildIndex(totalDirectories, WriteProgress);
     }
-    Console.WriteLine(CliText.Format(
-        "IndexComplete",
-        totalDirectories,
-        totalDirectories,
-        status.IndexedFiles,
-        stopwatch.Elapsed));
+    catch
+    {
+        if (!Console.IsOutputRedirected)
+        {
+            Console.WriteLine();
+        }
+        throw;
+    }
+    _ = status;
     return 0;
 }
 
 static void WriteProgress(IndexProgress progress)
 {
-    var message = CliText.Format(
+    Console.WriteLine(CliText.Format(
         "IndexProgress",
-        progress.CompletedDirectories,
-        progress.TotalDirectories,
         progress.Percent,
-        progress.Path);
-    if (Console.IsOutputRedirected)
-    {
-        Console.WriteLine(message);
-        return;
-    }
-    Console.Write($"\r{message}");
+        IndexPathFormatter.FormatAbsolute(progress.Path)));
 }
 
 static async Task<int> RunFindAsync(string[] arguments)

@@ -4,6 +4,15 @@ All notable changes to Shiori are documented in this file.
 
 ## [Unreleased]
 
+## [2.3.3] - 2026-08-23
+
+### Fixed
+
+- Changed interrupted Windows indexes to resume in Windows Terminal and ensured
+  indexing errors appear on a separate visible console line.
+- Changed Terminal indexing output to start with the workspace path and then show
+  one percentage and absolute file path per line.
+
 ## [2.3.1] - 2026-08-23
 
 ### Changed

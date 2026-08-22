@@ -3,6 +3,7 @@ namespace Shiori.Cli.Server;
 /// <summary>Resumes index generations left incomplete by an earlier process.</summary>
 internal sealed class InterruptedIndexResumeService(
     NativeEngineRegistry engines,
+    IIndexTerminalLauncher terminalLauncher,
     ILogger<InterruptedIndexResumeService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -19,6 +20,15 @@ internal sealed class InterruptedIndexResumeService(
 
             try
             {
+                if (OperatingSystem.IsWindows())
+                {
+                    logger.LogInformation(
+                        "Launching Windows Terminal to resume index for {WorkspacePath}.",
+                        workspace.Path);
+                    terminalLauncher.Launch(workspace.Path);
+                    continue;
+                }
+
                 logger.LogInformation("Resuming interrupted index for {WorkspacePath}.", workspace.Path);
                 var engine = engines.GetEngine(workspace.Path);
                 var totalDirectories = await Task.Run(

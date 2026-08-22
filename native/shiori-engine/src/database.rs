@@ -104,10 +104,17 @@ impl WorkspaceDatabase {
         let mut batch_bytes = 0_usize;
         let mut last_flush = Instant::now();
         let mut completed_directories = completed_directory_paths.len() as u64;
+        let mut last_file_path = None::<String>;
 
         let scan_result = index::scan(root, &completed_directory_paths, |event| {
             match event {
                 ScanEvent::File(file) => {
+                    progress(
+                        completed_directories,
+                        total_directories,
+                        &file.absolute_path,
+                    );
+                    last_file_path = Some(file.absolute_path.clone());
                     batch_bytes = batch_bytes.saturating_add(file.estimated_bytes());
                     batch.push(file);
                     if batch.len() >= BATCH_FILE_LIMIT
@@ -130,7 +137,6 @@ impl WorkspaceDatabase {
                     batch_bytes = 0;
                     last_flush = Instant::now();
                     completed_directories = completed_directories.saturating_add(1);
-                    progress(completed_directories, total_directories, &path);
                 }
             }
             Ok(())
@@ -143,7 +149,10 @@ impl WorkspaceDatabase {
             ));
         }
         publish_generation(&mut connection, &self.info.id, &generation)?;
-        read_index_status(&connection, &self.info.id)
+        let status = read_index_status(&connection, &self.info.id)?;
+        let final_path = last_file_path.unwrap_or_else(|| root.to_string_lossy().into_owned());
+        progress(total_directories, total_directories, &final_path);
+        Ok(status)
     }
 
     pub fn index_status(&self) -> Result<IndexStatus, String> {
@@ -610,6 +619,7 @@ fn workspace_id(normalized_path: &str) -> String {
 mod tests {
     use super::WorkspaceDatabase;
     use std::fs;
+    use std::path::Path;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
@@ -635,6 +645,13 @@ mod tests {
         assert_eq!(status.status, "ready");
         assert_eq!(status.indexed_files, 1);
         assert_eq!(progress.len(), 2);
+        assert_eq!(progress[0].0, 0);
+        assert_eq!(progress[1].0, 2);
+        assert!(
+            progress
+                .iter()
+                .all(|(_, _, path)| Path::new(path).is_absolute())
+        );
         assert_eq!(results, [std::path::PathBuf::from("src/main.rs")]);
         drop(database);
         fs::remove_dir_all(test_root).expect("test directory should be removed");
@@ -716,7 +733,14 @@ mod tests {
             .expect("index should search");
 
         assert_eq!(status.indexed_files, 2);
-        assert_eq!(progress, [(2, "remaining".to_owned()), (3, ".".to_owned())]);
+        assert_eq!(progress.len(), 2);
+        assert_eq!(progress[0].0, 1);
+        assert_eq!(progress[1].0, 3);
+        assert!(
+            progress
+                .iter()
+                .all(|(_, path)| Path::new(path).is_absolute())
+        );
         assert_eq!(results.len(), 2);
         {
             let connection = database.connection.lock().expect("database should lock");

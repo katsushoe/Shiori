@@ -64,6 +64,10 @@ If a name matches multiple migrated workspaces, use the workspace ID or absolute
 - `workspace_add`: registers a directory and adds it to the live access boundary.
   On Windows, the MCP server directly opens Windows Terminal and displays initial
   indexing progress. On other platforms, the initial index runs in the MCP request.
+  Interrupted Windows indexes also resume in Terminal at the next MCP server start,
+  and an indexing error prints its interruption reason on a separate line.
+  The first line identifies the workspace; every subsequent progress line contains
+  a percentage and one absolute file path.
 - `workspace_remove`: removes a workspace and its index rows from the live server.
 - `index_build`: builds and atomically publishes a workspace index.
 - `index_rebuild`: rebuilds and atomically replaces a workspace index.
