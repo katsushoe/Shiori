@@ -5,13 +5,19 @@ Shiori v2はファイル名とパスの検索だけを提供します。イン�
 
 ## CLI
 
+### `shiori version`
+
+MCPの`get_version`と同じサーバー名および4要素バージョンを返します。
+
 ### `shiori find`
 
 ```powershell
-shiori find <クエリ> --allow <絶対ディレクトリ> [--limit <1-100>]
+shiori find <クエリ> [--allow <絶対ディレクトリ> ...] [--limit <1-100>]
 ```
 
 作成済みSQLiteインデックスから、ファイル名または相対パスの一部を検索します。
+`--allow`を省略すると全登録ワークスペースを検索します。複数指定すると選択した
+集合を検索し、結果とワークスペース別エラーはMCPの`search_files`と一致します。
 
 ### `shiori index build`
 

@@ -5,13 +5,19 @@ directory entries and file metadata without opening file contents.
 
 ## CLI
 
+### `shiori version`
+
+Returns the same server name and four-part version as MCP `get_version`.
+
 ### `shiori find`
 
 ```powershell
-shiori find <query> --allow <absolute-directory> [--limit <1-100>]
+shiori find <query> [--allow <absolute-directory> ...] [--limit <1-100>]
 ```
 
 Searches the ready SQLite file index for a file-name or relative-path fragment.
+Omitting `--allow` searches all registered workspaces. Repeat `--allow` to
+search a selected set. Results and per-workspace errors match MCP `search_files`.
 
 ### `shiori index build`
 

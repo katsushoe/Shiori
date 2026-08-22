@@ -22,6 +22,7 @@ static async Task<int> RunAsync(string[] arguments)
     {
         return arguments[0] switch
         {
+            "version" => RunVersion(),
             "find" => await RunFindAsync(arguments[1..]).ConfigureAwait(false),
             "index" => await RunIndexAsync(arguments[1..]).ConfigureAwait(false),
             "config" => RunConfig(arguments[1..]),
@@ -35,6 +36,12 @@ static async Task<int> RunAsync(string[] arguments)
     {
         return Fail(exception.Message);
     }
+}
+
+static int RunVersion()
+{
+    WriteJson(ShioriTools.GetVersion());
+    return 0;
 }
 
 static int RunConfig(string[] arguments)
@@ -72,7 +79,7 @@ static async Task<int> RunWorkspaceAsync(string[] arguments)
 
     object response = arguments[0] switch
     {
-        "list" => new { workspaces = await registry.ListAsync().ConfigureAwait(false) },
+        "list" => await registry.ListAsync().ConfigureAwait(false),
         "remove" when arguments.Length >= 2 => await registry.RemoveAsync(arguments[1]).ConfigureAwait(false),
         "add" => throw new ArgumentException(CliText.Get("WorkspaceAddPathRequired")),
         "remove" => throw new ArgumentException(CliText.Get("WorkspaceRemoveTargetRequired")),
@@ -143,12 +150,15 @@ static async Task<int> RunFindAsync(string[] arguments)
     {
         return Fail(CliText.Get("FindQueryRequired"));
     }
-    var requestedWorkspace = GetOption(arguments, "--allow")
-        ?? throw new ArgumentException(CliText.Format("OptionRequired", "--allow"));
-    var workspace = await RequireRegisteredWorkspaceAsync(requestedWorkspace).ConfigureAwait(false);
     var limit = int.TryParse(GetOption(arguments, "--limit"), out var parsed) ? parsed : 20;
-    using var engine = NativeShioriEngine.Open(workspace);
-    WriteJson(new { results = engine.SearchFiles(arguments[0], limit) });
+    var registered = await new WorkspaceRegistry().ListAsync().ConfigureAwait(false);
+    using var engines = new NativeEngineRegistry(registered.Select(workspace => workspace.Path));
+    var coordinator = new WorkspaceCoordinator(engines);
+    var requested = GetOptions(arguments, "--allow");
+    var response = await coordinator
+        .SearchFilesAsync(arguments[0], requested.Count == 0 ? null : requested, limit, CancellationToken.None)
+        .ConfigureAwait(false);
+    WriteJson(response);
     return 0;
 }
 
@@ -181,6 +191,19 @@ static string? GetOption(string[] arguments, string option)
         }
     }
     return null;
+}
+
+static IReadOnlyList<string> GetOptions(string[] arguments, string option)
+{
+    var values = new List<string>();
+    for (var index = 0; index < arguments.Length - 1; index++)
+    {
+        if (string.Equals(arguments[index], option, StringComparison.Ordinal))
+        {
+            values.Add(arguments[index + 1]);
+        }
+    }
+    return values;
 }
 
 static void WriteJson<T>(T value)

@@ -21,7 +21,8 @@
   <data name="IndexProgress" xml:space="preserve"><value>インデックス作成中: {0}/{1} ({2}%)  {3}</value></data>
   <data name="IndexComplete" xml:space="preserve"><value>完了: {0}/{1} (100%)  ファイル: {2:N0}  経過時間: {3:c}</value></data>
   <data name="Usage" xml:space="preserve"><value>使用方法:
-  shiori find &lt;クエリ&gt; --allow &lt;ディレクトリ&gt; [--limit &lt;1-100&gt;]
+    shiori version
+    shiori find &lt;クエリ&gt; [--allow &lt;ディレクトリ&gt; ...] [--limit &lt;1-100&gt;]
   shiori index build --allow &lt;ディレクトリ&gt;
   shiori index status --allow &lt;ディレクトリ&gt;
   shiori index rebuild --allow &lt;ディレクトリ&gt;

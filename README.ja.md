@@ -103,6 +103,10 @@ shiori index status --allow F:\Projects\ProjectA
 起動時に未完了の世代を検出し、直前の完成済みインデックスを維持したまま
 バックグラウンドで自動再開します。
 
+CLIの`version`、`workspace list`、`index status`、`find`はMCPの読み取りToolに
+対応します。`find`は`--allow`省略時に全登録ワークスペースを検索し、複数の
+`--allow`を指定すると選択したワークスペースをまとめて検索します。
+
 ### 起動と接続
 
 ```powershell

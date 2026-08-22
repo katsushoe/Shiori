@@ -101,6 +101,10 @@ operations. Directory checkpoints are stored in SQLite. If indexing is
 interrupted, the server detects the unfinished generation at startup and
 resumes it in the background without replacing the last complete index.
 
+CLI `version`, `workspace list`, `index status`, and `find` correspond to the
+MCP read tools. `find` searches all registered workspaces when `--allow` is
+omitted and accepts repeated `--allow` options for a selected set.
+
 ### Start and Connect
 
 ```powershell
