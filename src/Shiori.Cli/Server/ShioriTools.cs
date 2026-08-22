@@ -80,14 +80,22 @@ internal sealed class ShioriTools
     }
 
     [McpServerTool(Name = "workspace_add", ReadOnly = false, Idempotent = false, OpenWorld = false)]
-    [Description("Registers an existing absolute directory and builds its initial index.")]
+    [Description("Registers an existing absolute directory and starts its initial index with visible progress.")]
     public static async Task<WorkspaceIndexResponse> AddWorkspace(
         [Description("Existing absolute directory to register.")] string path,
         NativeEngineRegistry engines,
+        IIndexTerminalLauncher terminalLauncher,
         CancellationToken cancellationToken = default)
     {
         var workspace = await new WorkspaceRegistry().AddAsync(path, cancellationToken).ConfigureAwait(false);
         engines.AllowWorkspace(workspace.Path);
+        if (OperatingSystem.IsWindows())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var currentStatus = engines.GetEngine(workspace.Path).GetIndexStatus();
+            terminalLauncher.Launch(workspace.Path);
+            return new WorkspaceIndexResponse(workspace, currentStatus);
+        }
         var status = await BuildIndexAsync(workspace.Path, engines, cancellationToken).ConfigureAwait(false);
         return new WorkspaceIndexResponse(workspace, status);
     }

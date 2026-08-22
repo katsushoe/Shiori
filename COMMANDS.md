@@ -61,8 +61,9 @@ If a name matches multiple migrated workspaces, use the workspace ID or absolute
 - `workspace_list`: lists allowed workspaces and their databases.
 - `index_status`: returns one allowed workspace's index state.
 - `search_files`: searches one, several, or all allowed workspaces.
-- `workspace_add`: registers a directory, adds it to the live access boundary,
-  and builds its initial index.
+- `workspace_add`: registers a directory and adds it to the live access boundary.
+  On Windows, the MCP server directly opens Windows Terminal and displays initial
+  indexing progress. On other platforms, the initial index runs in the MCP request.
 - `workspace_remove`: removes a workspace and its index rows from the live server.
 - `index_build`: builds and atomically publishes a workspace index.
 - `index_rebuild`: rebuilds and atomically replaces a workspace index.
