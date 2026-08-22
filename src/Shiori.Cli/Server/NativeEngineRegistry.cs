@@ -19,10 +19,6 @@ public sealed class NativeEngineRegistry : IWorkspaceEngineProvider, IDisposable
         _allowedWorkspaces = allowedWorkspaces
             .Select(Path.GetFullPath)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (_allowedWorkspaces.Count == 0)
-        {
-            throw new ArgumentException("At least one allowed workspace is required.", nameof(allowedWorkspaces));
-        }
     }
 
     /// <summary>Gets or opens the engine for an explicitly requested workspace.</summary>

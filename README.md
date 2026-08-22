@@ -109,7 +109,9 @@ shiori serve --port 39473
 
 The MCP endpoint is `http://127.0.0.1:39473/mcp`. Generate client configuration
 with `shiori config claude` or `shiori config codex`; both reference the token by
-environment-variable name and never embed its value.
+environment-variable name and never embed its value. The server can start with
+no registered workspaces; workspace listing and health checks remain available,
+while searches return no results until a workspace is registered.
 
 ## Documentation
 
