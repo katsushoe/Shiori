@@ -21,7 +21,8 @@
   <data name="IndexProgress" xml:space="preserve"><value>Indexing: {0}/{1} ({2}%)  {3}</value></data>
   <data name="IndexComplete" xml:space="preserve"><value>Complete: {0}/{1} (100%)  Files: {2:N0}  Elapsed: {3:c}</value></data>
   <data name="Usage" xml:space="preserve"><value>Usage:
-  shiori find &lt;query&gt; --allow &lt;directory&gt; [--limit &lt;1-100&gt;]
+    shiori version
+    shiori find &lt;query&gt; [--allow &lt;directory&gt; ...] [--limit &lt;1-100&gt;]
   shiori index build --allow &lt;directory&gt;
   shiori index status --allow &lt;directory&gt;
   shiori index rebuild --allow &lt;directory&gt;
