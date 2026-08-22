@@ -4,6 +4,15 @@ All notable changes to Shiori are documented in this file.
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-08-23
+
+### Added
+
+- Added authenticated MCP tools for workspace add/remove, index build/rebuild,
+  diagnostics, and Claude Code/Codex configuration generation.
+- Updated the live workspace access boundary immediately after MCP workspace
+  registration changes.
+
 ## [2.2.0] - 2026-08-23
 
 ### Added
