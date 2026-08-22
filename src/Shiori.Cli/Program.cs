@@ -61,9 +61,16 @@ static int RunWorkspace(string[] arguments)
         return Fail(CliText.Get("WorkspaceCommandRequired"));
     }
     var registry = new WorkspaceRegistry();
+    if (arguments[0] == "add" && arguments.Length >= 2)
+    {
+        var workspace = registry.Add(arguments[1]);
+        RunIndex(["rebuild", "--allow", workspace.Path]);
+        WriteJson(workspace);
+        return 0;
+    }
+
     object response = arguments[0] switch
     {
-        "add" when arguments.Length >= 2 => registry.Add(arguments[1]),
         "list" => new { workspaces = registry.List() },
         "remove" when arguments.Length >= 2 => registry.Remove(arguments[1]),
         "add" => throw new ArgumentException(CliText.Get("WorkspaceAddPathRequired")),

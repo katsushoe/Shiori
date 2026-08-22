@@ -44,7 +44,8 @@ shiori config codex [--port <1-65535>] [--name <server-name>]
 shiori serve [--port <1-65535>]
 ```
 
-`workspace add` is registration only and does not extend
+`workspace add` registers the workspace and automatically rebuilds its index
+while showing progress in the console. It does not extend
 `SHIORI_ALLOWED_WORKSPACES`.
 
 ## MCP tools
