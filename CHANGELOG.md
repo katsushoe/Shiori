@@ -4,6 +4,13 @@ All notable changes to Shiori are documented in this file.
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-08-23
+
+### Added
+
+- Added CLI `version` and multi-workspace `find` support matching all MCP
+  read tools and their structured search response.
+
 ## [2.1.1] - 2026-08-22
 
 ### Fixed
