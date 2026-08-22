@@ -117,6 +117,10 @@ environment-variable name and never embed its value. The server can start with
 no registered workspaces; workspace listing and health checks remain available,
 while searches return no results until a workspace is registered.
 
+Authenticated MCP clients can also add or remove workspaces, build indexes,
+run diagnostics, and generate client configuration. Protect the bearer token:
+adding a workspace expands the server's local filesystem access boundary.
+
 ## Documentation
 
 - [CLI command reference](COMMANDS.md)

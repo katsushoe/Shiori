@@ -60,6 +60,16 @@ shiori serve [--port <1-65535>]
 - `workspace_list`: 許可ワークスペースとデータベースを列挙します。
 - `index_status`: 許可ワークスペース1件のインデックス状態を返します。
 - `search_files`: 1件、複数、または全許可ワークスペースを検索します。
+- `workspace_add`: ディレクトリを登録し、稼働中のアクセス境界へ追加して初回
+  インデックスを作成します。
+- `workspace_remove`: 稼働中サーバーからワークスペースとインデックスを削除します。
+- `index_build`: ワークスペースのインデックスを作成して公開します。
+- `index_rebuild`: ワークスペースのインデックスを再構築して置換します。
+- `doctor`: Native、SQLite、ディレクトリ、設定、Token、ワークスペースを診断します。
+- `config_claude`: Claude Code用MCP設定を生成します。
+- `config_codex`: Codex用MCP設定を生成します。
 
-MCPツールはすべて読み取り専用です。進捗をコンソールで確認できるよう、
-インデックス作成はCLIから明示的に実行します。
+検索4 Toolと診断・設定3 Toolは読み取り専用です。ワークスペースおよび
+インデックス管理ToolはローカルSQLiteを変更し、全MCP要求と同じBearer Tokenを
+必要とします。`workspace_add`はファイルシステムのアクセス境界を拡張するため、
+Tokenを厳重に管理してください。`serve`はMCPホスト自身を起動するためCLI専用です。

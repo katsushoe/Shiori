@@ -15,6 +15,13 @@ internal static class DoctorRunner
 
     internal static async Task<int> RunAsync(CancellationToken cancellationToken = default)
     {
+        var report = await GetReportAsync(cancellationToken).ConfigureAwait(false);
+        Console.WriteLine(JsonSerializer.Serialize(report, JsonOptions));
+        return report.Status == "error" ? 1 : 0;
+    }
+
+    internal static async Task<DoctorReport> GetReportAsync(CancellationToken cancellationToken = default)
+    {
         var checks = new List<DoctorCheck>();
         AddNativeChecks(checks);
         AddDirectoryChecks(checks);
@@ -23,8 +30,7 @@ internal static class DoctorRunner
         var status = checks.Any(check => check.Status == "error")
             ? "error"
             : checks.Any(check => check.Status == "warning") ? "warning" : "ok";
-        Console.WriteLine(JsonSerializer.Serialize(new DoctorReport(status, checks), JsonOptions));
-        return status == "error" ? 1 : 0;
+        return new DoctorReport(status, checks);
     }
 
     private static void AddNativeChecks(List<DoctorCheck> checks)
@@ -116,7 +122,7 @@ internal static class DoctorRunner
         }
     }
 
-    private sealed record DoctorReport(string Status, IReadOnlyList<DoctorCheck> Checks);
+    internal sealed record DoctorReport(string Status, IReadOnlyList<DoctorCheck> Checks);
 
-    private sealed record DoctorCheck(string Name, string Status, string Detail);
+    internal sealed record DoctorCheck(string Name, string Status, string Detail);
 }
