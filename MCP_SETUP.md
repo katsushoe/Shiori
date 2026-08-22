@@ -133,8 +133,8 @@ shiori index build --allow F:\Projects\One
 shiori index build --allow F:\Projects\Two
 ```
 
-Later builds are incremental. MCP clients can call `update_indexes` for selected
-or all authorized workspaces and receive a response after every update finishes.
+Run the CLI again whenever the file index must be refreshed. MCP tools are
+read-only and never start index operations.
 Client scope and workspace authorization are independent: one registered client
 can access only paths listed in `SHIORI_ALLOWED_WORKSPACES`.
 
@@ -149,8 +149,7 @@ Stop at the first failed stage and resolve it before continuing.
    returned and no unauthorized root appears.
 4. Call read-only `search_files` with a known filename. Pass: the expected file
    is returned with its workspace identity.
-5. Run `shiori doctor`. Pass: required checks are `ok`; optional dependencies
-   may report `warning`.
+5. Run `shiori doctor`. Pass: required checks are `ok`.
 
 `search_files` may target one workspace, several workspace paths, or all allowed
 workspaces. Results include workspace identity so clients can distinguish equal
@@ -176,11 +175,5 @@ the client URL is `http://127.0.0.1:<port>/mcp`.
 
 ### Search returns stale results
 
-Call `update_indexes` or run `shiori index build --allow <workspace>`. Use
-`index rebuild` only when a full rescan is required.
-
-### Semantic navigation is unavailable
-
-File search and indexed code search do not require a language server. For C#
-semantic navigation, install `csharp-ls` or OmniSharp and optionally set
-`SHIORI_CSHARP_LSP_PATH` to its absolute executable path.
+Run `shiori index build --allow <workspace>`. Use `index rebuild` when an
+explicit replacement is required.

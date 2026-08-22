@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -5,7 +6,7 @@ using Shiori.Core.Engine;
 
 namespace Shiori.Native;
 
-/// <summary>Calls the Rust search engine through its versioned C ABI.</summary>
+/// <summary>Calls the Rust file-search engine through its versioned C ABI.</summary>
 public sealed class NativeShioriEngine : IShioriEngine
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -24,6 +25,30 @@ public sealed class NativeShioriEngine : IShioriEngine
 
     /// <inheritdoc />
     public uint AbiVersion { get; }
+
+    /// <summary>Opens the native engine for an explicitly allowed workspace.</summary>
+    public static unsafe NativeShioriEngine Open(string workspace)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspace);
+        var abiVersion = NativeAbi.GetAbiVersion();
+        if (abiVersion != NativeAbi.SupportedAbiVersion)
+        {
+            throw new ShioriEngineException(
+                $"Native ABI {abiVersion} is incompatible with host ABI {NativeAbi.SupportedAbiVersion}.");
+        }
+
+        var bytes = Encoding.UTF8.GetBytes(workspace);
+        fixed (byte* pointer = bytes)
+        {
+            var status = NativeAbi.Open(pointer, (nuint)bytes.Length, out var nativeHandle, out var error);
+            if (status != 0)
+            {
+                throw CreateException(error, "Native engine failed to open the workspace.");
+            }
+
+            return new NativeShioriEngine(new ShioriEngineHandle(nativeHandle), abiVersion);
+        }
+    }
 
     /// <inheritdoc />
     public WorkspaceInfo GetWorkspaceInfo()
@@ -50,64 +75,66 @@ public sealed class NativeShioriEngine : IShioriEngine
     public IndexStatus GetIndexStatus() => ReadIndexStatus(NativeAbi.GetIndexStatus, "Native index status failed.");
 
     /// <inheritdoc />
-    public IndexStatus BuildIndex() => ReadIndexStatus(NativeAbi.BuildIndex, "Native index build failed.");
-
-    /// <inheritdoc />
-    public IndexStatus RebuildIndex() => ReadIndexStatus(NativeAbi.RebuildIndex, "Native index rebuild failed.");
-
-    /// <inheritdoc />
-    public unsafe FileOutline GetFileOutline(string path)
+    public ulong CountIndexDirectories()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        var bytes = Encoding.UTF8.GetBytes(path);
-        fixed (byte* pointer = bytes)
+        var status = NativeAbi.CountIndexDirectories(_handle, out var count, out var error);
+        if (status != 0)
         {
-            var status = NativeAbi.GetFileOutline(
+            throw CreateException(error, "Native directory count failed.");
+        }
+
+        return count;
+    }
+
+    /// <inheritdoc />
+    public unsafe IndexStatus BuildIndex(
+        ulong totalDirectories,
+        Action<IndexProgress>? progress = null)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentOutOfRangeException.ThrowIfZero(totalDirectories);
+        var state = new ProgressCallbackState(progress);
+        var stateHandle = GCHandle.Alloc(state);
+        try
+        {
+            var status = NativeAbi.BuildIndex(
                 _handle,
-                pointer,
-                (nuint)bytes.Length,
+                totalDirectories,
+                &ReportProgress,
+                GCHandle.ToIntPtr(stateHandle),
                 out var result,
                 out var error);
+            if (state.Exception is not null)
+            {
+                if (status == 0)
+                {
+                    NativeAbi.FreeBuffer(result);
+                }
+                else
+                {
+                    NativeAbi.FreeBuffer(error);
+                }
+                throw new ShioriEngineException("Index progress reporting failed.", state.Exception);
+            }
             if (status != 0)
             {
-                throw CreateException(error, "Native file outline failed.");
+                throw CreateException(error, "Native index build failed.");
             }
 
             try
             {
-                return JsonSerializer.Deserialize<FileOutline>(ReadBuffer(result), JsonOptions)
-                    ?? throw new ShioriEngineException("Native engine returned an invalid file outline.");
+                return JsonSerializer.Deserialize<IndexStatus>(ReadBuffer(result), JsonOptions)
+                    ?? throw new ShioriEngineException("Native engine returned invalid index status.");
             }
             finally
             {
                 NativeAbi.FreeBuffer(result);
             }
         }
-    }
-
-    /// <summary>Opens the native engine for an explicitly allowed workspace.</summary>
-    public static unsafe NativeShioriEngine Open(string workspace)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workspace);
-        var abiVersion = NativeAbi.GetAbiVersion();
-        if (abiVersion != NativeAbi.SupportedAbiVersion)
+        finally
         {
-            throw new ShioriEngineException(
-                $"Native ABI {abiVersion} is incompatible with host ABI {NativeAbi.SupportedAbiVersion}.");
-        }
-
-        var bytes = Encoding.UTF8.GetBytes(workspace);
-        fixed (byte* pointer = bytes)
-        {
-            var status = NativeAbi.Open(pointer, (nuint)bytes.Length, out var nativeHandle, out var error);
-            if (status != 0)
-            {
-                throw CreateException(error, "Native engine failed to open the workspace.");
-            }
-
-            var handle = new ShioriEngineHandle(nativeHandle);
-            return new NativeShioriEngine(handle, abiVersion);
+            stateHandle.Free();
         }
     }
 
@@ -136,119 +163,8 @@ public sealed class NativeShioriEngine : IShioriEngine
 
             try
             {
-                return JsonSerializer.Deserialize<SearchResponse>(ReadBuffer(result), JsonOptions)?.Results
+                return JsonSerializer.Deserialize<IReadOnlyList<SearchResult>>(ReadBuffer(result), JsonOptions)
                     ?? throw new ShioriEngineException("Native engine returned an invalid response.");
-            }
-            finally
-            {
-                NativeAbi.FreeBuffer(result);
-            }
-        }
-    }
-
-    /// <inheritdoc />
-    public unsafe IReadOnlyList<SearchResult> SearchText(
-        string query,
-        string? path = null,
-        string? glob = null,
-        bool regex = false,
-        bool caseSensitive = false,
-        int contextLines = 0,
-        int limit = 20)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        ArgumentException.ThrowIfNullOrWhiteSpace(query);
-        ArgumentOutOfRangeException.ThrowIfLessThan(contextLines, 0);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(contextLines, 10);
-        ArgumentOutOfRangeException.ThrowIfLessThan(limit, 1);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(limit, 100);
-
-        var request = JsonSerializer.Serialize(
-            new { query, path, glob, regex, caseSensitive, contextLines, limit },
-            JsonOptions);
-        var bytes = Encoding.UTF8.GetBytes(request);
-        fixed (byte* pointer = bytes)
-        {
-            var status = NativeAbi.SearchText(
-                _handle,
-                pointer,
-                (nuint)bytes.Length,
-                out var result,
-                out var error);
-            if (status != 0)
-            {
-                throw CreateException(error, "Native text search failed.");
-            }
-
-            try
-            {
-                return JsonSerializer.Deserialize<SearchResponse>(ReadBuffer(result), JsonOptions)?.Results
-                    ?? throw new ShioriEngineException("Native engine returned an invalid response.");
-            }
-            finally
-            {
-                NativeAbi.FreeBuffer(result);
-            }
-        }
-    }
-
-    /// <inheritdoc />
-    public unsafe IReadOnlyList<SymbolSearchResult> SearchSymbols(
-        string query,
-        string? kind = null,
-        string? language = null,
-        string? path = null,
-        int limit = 20)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        ArgumentException.ThrowIfNullOrWhiteSpace(query);
-        ArgumentOutOfRangeException.ThrowIfLessThan(limit, 1);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(limit, 100);
-        var request = JsonSerializer.Serialize(new { query, kind, language, path, limit }, JsonOptions);
-        var bytes = Encoding.UTF8.GetBytes(request);
-        fixed (byte* pointer = bytes)
-        {
-            var status = NativeAbi.SearchSymbols(
-                _handle, pointer, (nuint)bytes.Length, out var result, out var error);
-            if (status != 0)
-            {
-                throw CreateException(error, "Native symbol search failed.");
-            }
-            try
-            {
-                return JsonSerializer.Deserialize<SearchSymbolsResponse>(ReadBuffer(result), JsonOptions)?.Results
-                    ?? throw new ShioriEngineException("Native engine returned an invalid symbol search response.");
-            }
-            finally
-            {
-                NativeAbi.FreeBuffer(result);
-            }
-        }
-    }
-
-    /// <inheritdoc />
-    public unsafe IReadOnlyList<AstSearchResult> SearchAst(
-        string language,
-        string pattern,
-        string? path = null,
-        int limit = 20)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        ArgumentException.ThrowIfNullOrWhiteSpace(language);
-        ArgumentException.ThrowIfNullOrWhiteSpace(pattern);
-        ArgumentOutOfRangeException.ThrowIfLessThan(limit, 1);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(limit, 100);
-        var request = JsonSerializer.Serialize(new { language, pattern, path, limit }, JsonOptions);
-        var bytes = Encoding.UTF8.GetBytes(request);
-        fixed (byte* pointer = bytes)
-        {
-            var status = NativeAbi.SearchAst(
-                _handle, pointer, (nuint)bytes.Length, out var result, out var error);
-            if (status != 0) throw CreateException(error, "Native AST search failed.");
-            try
-            {
-                return JsonSerializer.Deserialize<AstSearchResponse>(ReadBuffer(result), JsonOptions)?.Results
-                    ?? throw new ShioriEngineException("Native engine returned an invalid AST search response.");
             }
             finally
             {
@@ -260,14 +176,42 @@ public sealed class NativeShioriEngine : IShioriEngine
     /// <inheritdoc />
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
         _handle.Dispose();
         _disposed = true;
     }
 
-    private static ShioriEngineException CreateException(
-        NativeAbi.NativeBuffer error,
-        string fallbackMessage)
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe void ReportProgress(
+        ulong completed,
+        ulong total,
+        byte* path,
+        nuint pathLength,
+        nint context)
+    {
+        var handle = GCHandle.FromIntPtr(context);
+        if (handle.Target is not ProgressCallbackState state || state.Callback is null || state.Exception is not null)
+        {
+            return;
+        }
+
+        try
+        {
+            var relativePath = path is null || pathLength == 0
+                ? string.Empty
+                : Encoding.UTF8.GetString(path, checked((int)pathLength));
+            state.Callback(new IndexProgress(completed, total, relativePath));
+        }
+        catch (Exception exception)
+        {
+            state.Exception = exception;
+        }
+    }
+
+    private static ShioriEngineException CreateException(NativeAbi.NativeBuffer error, string fallbackMessage)
     {
         try
         {
@@ -300,16 +244,16 @@ public sealed class NativeShioriEngine : IShioriEngine
         }
     }
 
-    private static string ReadBuffer(NativeAbi.NativeBuffer buffer)
-    {
-        return buffer.Pointer == 0 || buffer.Length == 0
+    private static string ReadBuffer(NativeAbi.NativeBuffer buffer) =>
+        buffer.Pointer == 0 || buffer.Length == 0
             ? string.Empty
             : Marshal.PtrToStringUTF8(buffer.Pointer, checked((int)buffer.Length));
+
+    private sealed class ProgressCallbackState(Action<IndexProgress>? callback)
+    {
+        internal Action<IndexProgress>? Callback { get; } = callback;
+        internal Exception? Exception { get; set; }
     }
-
-    private sealed record SearchResponse(IReadOnlyList<SearchResult> Results);
-
-    private sealed record AstSearchResponse(IReadOnlyList<AstSearchResult> Results);
 
     private delegate int IndexOperation(
         ShioriEngineHandle handle,

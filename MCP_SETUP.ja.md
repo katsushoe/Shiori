@@ -131,8 +131,8 @@ shiori index build --allow F:\Projects\One
 shiori index build --allow F:\Projects\Two
 ```
 
-2回目以降は差分更新です。MCPクライアントは`update_indexes`で選択したワークスペース
-または許可された全ワークスペースを更新でき、応答は全更新の完了後に返ります。
+ファイルインデックスの更新が必要なときはCLIを再実行します。MCPツールは
+読み取り専用であり、インデックス処理を開始しません。
 クライアントスコープとワークスペース認可は独立しており、登録済みクライアントも
 `SHIORI_ALLOWED_WORKSPACES`にないパスへはアクセスできません。
 
@@ -147,8 +147,7 @@ shiori index build --allow F:\Projects\Two
    返ることです。
 4. 読み取り専用の`search_files`で既知のファイル名を検索します。合格条件は
    ワークスペース識別情報付きで対象ファイルが返ることです。
-5. `shiori doctor`を実行します。合格条件は必須Checkが`ok`であり、任意依存だけが
-   `warning`になり得ることです。
+5. `shiori doctor`を実行します。合格条件は必須Checkが`ok`であることです。
 
 `search_files`は1つ、複数、または許可された全ワークスペースを対象にできます。
 結果にはワークスペース識別情報が含まれ、異なるルートの同一相対パスを区別できます。
@@ -172,11 +171,5 @@ shiori index build --allow F:\Projects\Two
 
 ### 検索結果が古い
 
-`update_indexes`を呼ぶか、`shiori index build --allow <workspace>`を実行します。
-完全な再走査が必要な場合だけ`index rebuild`を使用します。
-
-### セマンティックナビゲーションが利用できない
-
-ファイル検索とインデックス済みコード検索に言語サーバーは不要です。C#の
-セマンティックナビゲーションには`csharp-ls`またはOmniSharpを導入し、必要なら
-実行ファイルの絶対パスを`SHIORI_CSHARP_LSP_PATH`へ設定します。
+`shiori index build --allow <workspace>`を実行します。明示的な置き換えが必要な場合は
+`index rebuild`を使用します。

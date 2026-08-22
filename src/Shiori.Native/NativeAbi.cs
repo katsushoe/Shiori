@@ -1,11 +1,12 @@
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 
 namespace Shiori.Native;
 
 internal static partial class NativeAbi
 {
     internal const string LibraryName = "shiori_engine";
-    internal const uint SupportedAbiVersion = 2;
+    internal const uint SupportedAbiVersion = 3;
 
     [StructLayout(LayoutKind.Sequential)]
     internal readonly struct NativeBuffer
@@ -36,38 +37,6 @@ internal static partial class NativeAbi
         out NativeBuffer result,
         out NativeBuffer error);
 
-    [LibraryImport(LibraryName, EntryPoint = "shiori_engine_search_text")]
-    internal static unsafe partial int SearchText(
-        ShioriEngineHandle handle,
-        byte* request,
-        nuint requestLength,
-        out NativeBuffer result,
-        out NativeBuffer error);
-
-    [LibraryImport(LibraryName, EntryPoint = "shiori_engine_search_symbols")]
-    internal static unsafe partial int SearchSymbols(
-        ShioriEngineHandle handle,
-        byte* request,
-        nuint requestLength,
-        out NativeBuffer result,
-        out NativeBuffer error);
-
-    [LibraryImport(LibraryName, EntryPoint = "shiori_engine_search_ast")]
-    internal static unsafe partial int SearchAst(
-        ShioriEngineHandle handle,
-        byte* request,
-        nuint requestLength,
-        out NativeBuffer result,
-        out NativeBuffer error);
-
-    [LibraryImport(LibraryName, EntryPoint = "shiori_engine_file_outline")]
-    internal static unsafe partial int GetFileOutline(
-        ShioriEngineHandle handle,
-        byte* path,
-        nuint pathLength,
-        out NativeBuffer result,
-        out NativeBuffer error);
-
     [LibraryImport(LibraryName, EntryPoint = "shiori_engine_workspace_info")]
     internal static partial int GetWorkspaceInfo(
         ShioriEngineHandle handle,
@@ -80,15 +49,18 @@ internal static partial class NativeAbi
         out NativeBuffer result,
         out NativeBuffer error);
 
-    [LibraryImport(LibraryName, EntryPoint = "shiori_engine_index_build")]
-    internal static partial int BuildIndex(
+    [LibraryImport(LibraryName, EntryPoint = "shiori_engine_index_directory_count")]
+    internal static partial int CountIndexDirectories(
         ShioriEngineHandle handle,
-        out NativeBuffer result,
+        out ulong count,
         out NativeBuffer error);
 
-    [LibraryImport(LibraryName, EntryPoint = "shiori_engine_index_rebuild")]
-    internal static partial int RebuildIndex(
+    [LibraryImport(LibraryName, EntryPoint = "shiori_engine_index_build")]
+    internal static unsafe partial int BuildIndex(
         ShioriEngineHandle handle,
+        ulong totalDirectories,
+        delegate* unmanaged[Cdecl]<ulong, ulong, byte*, nuint, nint, void> callback,
+        nint context,
         out NativeBuffer result,
         out NativeBuffer error);
 

@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "1.2.0",
+    [string]$Version = "2.0.0",
     [switch]$SkipInstaller
 )
 
@@ -40,7 +40,6 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Copy-Item -LiteralPath $nativeLibrary -Destination $binaryDirectory
-& (Join-Path $PSScriptRoot "Stage-Ripgrep.ps1") -DestinationDirectory $binaryDirectory
 Copy-Item -LiteralPath (Join-Path $repoRoot "README.md") -Destination $publishDirectory
 Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSE") -Destination $publishDirectory
 Copy-Item -LiteralPath (Join-Path $repoRoot "CHANGELOG.md") -Destination $publishDirectory

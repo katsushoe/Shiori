@@ -47,7 +47,6 @@ MCPプロトコル値は言語に依存しません。
 | `SHIORI_ALLOWED_WORKSPACES` | `serve`で必須 | パスリスト | なし | 存在する絶対ディレクトリ |
 | `SHIORI_DATA_HOME` | 任意 | 絶対パス | `<インストールルート>\data` | 書き込み可能なディレクトリ |
 | `SHIORI_EXCLUDE_PATTERNS` | 任意 | パターンリスト | なし | `;`区切りのgitignore形式パターン |
-| `SHIORI_CSHARP_LSP_PATH` | 任意 | 絶対ファイルパス | 自動検出 | 存在するC#言語サーバー実行ファイル |
 
 環境変数は`shiori serve`プロセスの起動時に読み込まれます。変更後はサーバーを
 再起動してください。
@@ -90,16 +89,6 @@ Shiori既定のビルド・依存ディレクトリ除外と組み合わせて�
 
 ```powershell
 $env:SHIORI_EXCLUDE_PATTERNS = 'generated/**;*.min.js'
-```
-
-### `SHIORI_CSHARP_LSP_PATH`
-
-`csharp-ls`またはOmniSharpの任意の絶対パスです。省略時は`PATH`から検索します。
-C#セマンティックナビゲーションだけで使用し、未設定でもファイル検索と
-インデックス済みコード検索は利用できます。
-
-```powershell
-$env:SHIORI_CSHARP_LSP_PATH = 'C:\Tools\csharp-ls.exe'
 ```
 
 ## プロファイル設定

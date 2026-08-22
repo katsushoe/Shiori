@@ -3,15 +3,13 @@
 **Formal macOS distribution is not planned.** Windows is the only officially
 released and supported platform. macOS 15 on Apple Silicon (`arm64`) and
 Intel (`x64`) is exercised in CI (test suites, package build, Native ABI
-loading, diagnostics, and an AST-search smoke test) for portability, and the
+loading, diagnostics, and a file-search smoke test) for portability, and the
 build steps below are provided for anyone building from source at their own
 risk, but no official macOS package is published or supported.
 
 ## Requirements
 
 - .NET 10 runtime
-- `ripgrep` on `PATH`
-- A C# language server on `PATH` only when semantic C# navigation is required
 
 ## Package
 

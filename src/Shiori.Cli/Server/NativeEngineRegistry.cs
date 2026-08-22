@@ -10,14 +10,10 @@ public sealed class NativeEngineRegistry : IWorkspaceEngineProvider, IDisposable
     private readonly HashSet<string> _allowedWorkspaces;
     private readonly ConcurrentDictionary<string, Lazy<IShioriEngine>> _engines =
         new(StringComparer.OrdinalIgnoreCase);
-    private readonly IReadOnlyList<WorkspaceIndexWatcher> _watchers;
     private bool _disposed;
 
     /// <summary>Initializes a registry restricted to explicit workspace roots.</summary>
-    public NativeEngineRegistry(
-        IEnumerable<string> allowedWorkspaces,
-        Action<string, Exception>? onWatcherError = null,
-        TimeSpan? watcherDebounce = null)
+    public NativeEngineRegistry(IEnumerable<string> allowedWorkspaces)
     {
         ArgumentNullException.ThrowIfNull(allowedWorkspaces);
         _allowedWorkspaces = allowedWorkspaces
@@ -27,14 +23,6 @@ public sealed class NativeEngineRegistry : IWorkspaceEngineProvider, IDisposable
         {
             throw new ArgumentException("At least one allowed workspace is required.", nameof(allowedWorkspaces));
         }
-
-        _watchers = _allowedWorkspaces
-            .Select(path => new WorkspaceIndexWatcher(
-                path,
-                () => GetEngine(path),
-                onWatcherError,
-                watcherDebounce))
-            .ToArray();
     }
 
     /// <summary>Gets or opens the engine for an explicitly requested workspace.</summary>
@@ -89,11 +77,6 @@ public sealed class NativeEngineRegistry : IWorkspaceEngineProvider, IDisposable
         if (_disposed)
         {
             return;
-        }
-
-        foreach (var watcher in _watchers)
-        {
-            watcher.Dispose();
         }
 
         foreach (var engine in _engines.Values)

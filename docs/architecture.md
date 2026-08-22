@@ -8,28 +8,25 @@ The C# host owns:
 
 - a single localhost Streamable HTTP MCP endpoint and tool contracts
 - CLI and configuration
-- query planning and response shaping
+- file-search response shaping
 - native engine loading and ABI compatibility checks
-- language-server discovery, lifecycle, and LSP JSON-RPC
 
 The Rust engine owns:
 
 - workspace boundary enforcement
-- file, text, symbol, and AST search
+- file-name and relative-path search
 - SQLite connections, schema, and indexes
-- Tree-sitter parsers and incremental indexing
+- Gitignore-aware metadata-only indexing with bounded batches
 
 The boundary is a versioned C ABI. Calls operate on coarse search requests and
 structured result buffers. Rust allocates result buffers and C# always returns
 them through `shiori_engine_free_buffer`. Engine instances are opaque handles
 closed through `shiori_engine_close`. No panic may cross the ABI boundary.
 
-SQLite connections and Tree-sitter objects must not be shared across the ABI.
-They remain entirely owned by the Rust engine.
-
-LSP processes remain outside the native ABI and are owned by the managed host.
-See [ADR 0001](adr/0001-lsp-engine.md) for lifecycle, fallback, and security
-decisions.
+SQLite connections remain entirely owned by the Rust engine. Index progress
+crosses the ABI through a synchronous directory-completion callback. See
+[ADR 0003](adr/0003-file-search-only-index.md) for the v2 responsibility and
+streaming-index decision.
 
 Each canonical workspace has a stable SHA-256 ID and an isolated SQLite
 database. Schema migrations run transactionally when the native engine opens

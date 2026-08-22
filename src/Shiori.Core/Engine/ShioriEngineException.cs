@@ -8,4 +8,10 @@ public sealed class ShioriEngineException : Exception
         : base(message)
     {
     }
+
+    /// <summary>Initializes a new engine exception with its underlying cause.</summary>
+    public ShioriEngineException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
 }
