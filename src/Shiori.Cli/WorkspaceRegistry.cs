@@ -8,7 +8,7 @@ namespace Shiori.Cli;
 /// <summary>Persists registered workspaces and all file indexes in one SQLite database.</summary>
 internal sealed class WorkspaceRegistry
 {
-    private const int SchemaVersion = 3;
+    private const int SchemaVersion = 4;
     private const string DatabaseFileName = "shiori.db";
     private const string LegacyRegistryFileName = "workspaces.json";
     private const string LegacySqliteRegistryFileName = "workspaces.db";
@@ -67,6 +67,30 @@ internal sealed class WorkspaceRegistry
             SELECT id, path, name
             FROM Workspaces
             ORDER BY name COLLATE NOCASE, path COLLATE NOCASE;
+            """;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        var workspaces = new List<WorkspaceInfo>();
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            workspaces.Add(ReadWorkspace(reader));
+        }
+
+        return workspaces;
+    }
+
+    /// <summary>Lists workspaces whose staging index was not published.</summary>
+    internal async Task<IReadOnlyList<WorkspaceInfo>> ListInterruptedAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT workspace.id, workspace.path, workspace.name
+            FROM Workspaces AS workspace
+            JOIN index_state_v2 AS state ON state.workspace_id = workspace.id
+            WHERE state.status = 'indexing' AND state.staging_generation IS NOT NULL
+            ORDER BY workspace.name COLLATE NOCASE, workspace.path COLLATE NOCASE;
             """;
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         var workspaces = new List<WorkspaceInfo>();
@@ -160,6 +184,13 @@ internal sealed class WorkspaceRegistry
                     last_full_index TEXT,
                     status TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS index_directory_progress (
+                    workspace_id TEXT NOT NULL REFERENCES Workspaces(id) ON DELETE CASCADE,
+                    generation_id TEXT NOT NULL,
+                    relative_path TEXT NOT NULL,
+                    completed_at TEXT NOT NULL,
+                    PRIMARY KEY(workspace_id, generation_id, relative_path)
+                );
                 CREATE TABLE IF NOT EXISTS files_v2 (
                     workspace_id TEXT NOT NULL REFERENCES Workspaces(id) ON DELETE CASCADE,
                     generation_id TEXT NOT NULL,
@@ -174,14 +205,54 @@ internal sealed class WorkspaceRegistry
                 );
                 CREATE INDEX IF NOT EXISTS files_v2_search
                     ON files_v2(workspace_id, generation_id, relative_path COLLATE NOCASE);
-                PRAGMA user_version = 3;
                 """;
             await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
+        await AddColumnIfMissingAsync(
+            connection,
+            "staging_generation",
+            "TEXT",
+            cancellationToken).ConfigureAwait(false);
+        await AddColumnIfMissingAsync(
+            connection,
+            "staging_total_directories",
+            "INTEGER",
+            cancellationToken).ConfigureAwait(false);
+        await AddColumnIfMissingAsync(
+            connection,
+            "staging_completed_directories",
+            "INTEGER NOT NULL DEFAULT 0",
+            cancellationToken).ConfigureAwait(false);
+        await ExecuteAsync(connection, "PRAGMA user_version = 4;", cancellationToken).ConfigureAwait(false);
+
         await MigrateLegacySqliteRegistryAsync(connection, cancellationToken).ConfigureAwait(false);
         await MigrateLegacyJsonRegistryAsync(connection, cancellationToken).ConfigureAwait(false);
         await MigrateWorkspaceDatabasesAsync(connection, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task AddColumnIfMissingAsync(
+        SqliteConnection connection,
+        string column,
+        string definition,
+        CancellationToken cancellationToken)
+    {
+        await using var check = connection.CreateCommand();
+        check.CommandText =
+            "SELECT count(*) FROM pragma_table_info('index_state_v2') WHERE name = $column;";
+        check.Parameters.AddWithValue("$column", column);
+        var exists = Convert.ToInt64(
+            await check.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
+            System.Globalization.CultureInfo.InvariantCulture);
+        if (exists != 0)
+        {
+            return;
+        }
+
+        await ExecuteAsync(
+            connection,
+            $"ALTER TABLE index_state_v2 ADD COLUMN {column} {definition};",
+            cancellationToken).ConfigureAwait(false);
     }
 
     private async Task MigrateLegacySqliteRegistryAsync(

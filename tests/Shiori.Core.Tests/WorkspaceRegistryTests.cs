@@ -23,8 +23,8 @@ public sealed class WorkspaceRegistryTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText =
             "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN " +
-            "('Workspaces', 'index_state_v2', 'files_v2');";
-        Assert.Equal(3L, await command.ExecuteScalarAsync(CancellationToken.None));
+            "('Workspaces', 'index_state_v2', 'files_v2', 'index_directory_progress');";
+        Assert.Equal(4L, await command.ExecuteScalarAsync(CancellationToken.None));
     }
 
     [Fact]
@@ -42,7 +42,7 @@ public sealed class WorkspaceRegistryTests : IDisposable
 
         var workspaces = await registry.ListAsync(CancellationToken.None);
 
-        Assert.Equal([workspace with { DatabasePath = registry.DatabasePath, SchemaVersion = 3 }], workspaces);
+        Assert.Equal([workspace with { DatabasePath = registry.DatabasePath, SchemaVersion = 4 }], workspaces);
         Assert.False(File.Exists(legacyPath));
         Assert.True(File.Exists($"{legacyPath}.migrated"));
     }
@@ -57,7 +57,7 @@ public sealed class WorkspaceRegistryTests : IDisposable
 
         var workspaces = await registry.ListAsync(CancellationToken.None);
 
-        Assert.Equal([workspace with { DatabasePath = registry.DatabasePath, SchemaVersion = 3 }], workspaces);
+        Assert.Equal([workspace with { DatabasePath = registry.DatabasePath, SchemaVersion = 4 }], workspaces);
         Assert.False(Directory.Exists(Path.Combine(_dataRoot, "indexes")));
         await using var connection = await OpenAsync(registry.DatabasePath);
         Assert.Equal(1L, await CountAsync(connection, "files_v2"));
@@ -76,9 +76,9 @@ public sealed class WorkspaceRegistryTests : IDisposable
 
         var removed = await registry.RemoveAsync(removedWorkspace.Id, CancellationToken.None);
 
-        Assert.Equal(removedWorkspace with { DatabasePath = registry.DatabasePath, SchemaVersion = 3 }, removed);
+        Assert.Equal(removedWorkspace with { DatabasePath = registry.DatabasePath, SchemaVersion = 4 }, removed);
         Assert.Equal(
-            [retainedWorkspace with { DatabasePath = registry.DatabasePath, SchemaVersion = 3 }],
+            [retainedWorkspace with { DatabasePath = registry.DatabasePath, SchemaVersion = 4 }],
             await registry.ListAsync(CancellationToken.None));
         await using var connection = await OpenAsync(registry.DatabasePath);
         Assert.Equal(1L, await CountAsync(connection, "files_v2"));
@@ -101,6 +101,36 @@ public sealed class WorkspaceRegistryTests : IDisposable
         Assert.Equal(2, (await registry.ListAsync(CancellationToken.None)).Count);
         await using var connection = await OpenAsync(registry.DatabasePath);
         Assert.Equal(2L, await CountAsync(connection, "files_v2"));
+    }
+
+    [Fact]
+    public async Task ListInterruptedAsync_ReturnsOnlyUnpublishedIndexGenerations()
+    {
+        var registry = new WorkspaceRegistry(_dataRoot);
+        _ = await registry.ListAsync(CancellationToken.None);
+        var interrupted = CreateWorkspace("interrupted");
+        var ready = CreateWorkspace("ready");
+        await InsertIndexedWorkspaceAsync(registry.DatabasePath, interrupted);
+        await InsertIndexedWorkspaceAsync(registry.DatabasePath, ready);
+        await using (var connection = await OpenAsync(registry.DatabasePath))
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText =
+                """
+                UPDATE index_state_v2
+                SET status = 'indexing', staging_generation = 'staging',
+                    staging_total_directories = 2, staging_completed_directories = 1
+                WHERE workspace_id = $id;
+                """;
+            command.Parameters.AddWithValue("$id", interrupted.Id);
+            await command.ExecuteNonQueryAsync(CancellationToken.None);
+        }
+
+        var result = await registry.ListInterruptedAsync(CancellationToken.None);
+
+        Assert.Equal(
+            [interrupted with { DatabasePath = registry.DatabasePath, SchemaVersion = 4 }],
+            result);
     }
 
     public void Dispose()

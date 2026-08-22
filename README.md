@@ -97,7 +97,9 @@ shiori index status --allow F:\Projects\ProjectA
 
 Shiori counts included directories before indexing and prints directory-level
 progress in the console. Index updates are explicit CLI operations, not MCP
-operations.
+operations. Directory checkpoints are stored in SQLite. If indexing is
+interrupted, the server detects the unfinished generation at startup and
+resumes it in the background without replacing the last complete index.
 
 ### Start and Connect
 

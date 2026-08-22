@@ -2,12 +2,13 @@ use crate::index::{self, IndexedFile, ScanEvent};
 use rusqlite::{Connection, params};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+use std::collections::HashSet;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 const BATCH_FILE_LIMIT: usize = 1_000;
 const BATCH_BYTE_LIMIT: usize = 16 * 1024 * 1024;
 const BATCH_TIME_LIMIT: Duration = Duration::from_secs(2);
@@ -97,14 +98,14 @@ impl WorkspaceDatabase {
         mut progress: impl FnMut(u64, u64, &str),
     ) -> Result<IndexStatus, String> {
         let mut connection = self.lock()?;
-        cleanup_staging(&connection, &self.info.id)?;
-        let generation = generation_id();
+        let (generation, completed_directory_paths) =
+            prepare_index(&mut connection, &self.info.id, total_directories)?;
         let mut batch = Vec::<IndexedFile>::with_capacity(BATCH_FILE_LIMIT);
         let mut batch_bytes = 0_usize;
         let mut last_flush = Instant::now();
-        let mut completed_directories = 0_u64;
+        let mut completed_directories = completed_directory_paths.len() as u64;
 
-        let scan_result = index::scan(root, |event| {
+        let scan_result = index::scan(root, &completed_directory_paths, |event| {
             match event {
                 ScanEvent::File(file) => {
                     batch_bytes = batch_bytes.saturating_add(file.estimated_bytes());
@@ -119,6 +120,15 @@ impl WorkspaceDatabase {
                     }
                 }
                 ScanEvent::DirectoryComplete(path) => {
+                    checkpoint_directory(
+                        &mut connection,
+                        &self.info.id,
+                        &generation,
+                        &path,
+                        &mut batch,
+                    )?;
+                    batch_bytes = 0;
+                    last_flush = Instant::now();
                     completed_directories = completed_directories.saturating_add(1);
                     progress(completed_directories, total_directories, &path);
                 }
@@ -191,7 +201,7 @@ fn flush_batch(
     {
         let mut statement = transaction
             .prepare_cached(
-                "INSERT INTO files_v2
+                "INSERT OR REPLACE INTO files_v2
                  (workspace_id, generation_id, path, relative_path, file_name, extension,
                   size, mtime, indexed_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
@@ -220,6 +230,85 @@ fn flush_batch(
     Ok(())
 }
 
+fn prepare_index(
+    connection: &mut Connection,
+    workspace_id: &str,
+    total_directories: u64,
+) -> Result<(String, HashSet<String>), String> {
+    let resumable = connection
+        .query_row(
+            "SELECT staging_generation, staging_total_directories
+             FROM index_state_v2
+             WHERE workspace_id = ?1 AND status = 'indexing' AND staging_generation IS NOT NULL",
+            params![workspace_id],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)),
+        )
+        .ok()
+        .filter(|(_, total)| *total == total_directories as i64);
+    if let Some((generation, _)) = resumable {
+        let mut statement = connection
+            .prepare(
+                "SELECT relative_path FROM index_directory_progress
+                 WHERE workspace_id = ?1 AND generation_id = ?2",
+            )
+            .map_err(|source| format!("cannot prepare index progress: {source}"))?;
+        let paths = statement
+            .query_map(params![workspace_id, generation], |row| {
+                row.get::<_, String>(0)
+            })
+            .map_err(|source| format!("cannot read index progress: {source}"))?
+            .collect::<Result<HashSet<_>, _>>()
+            .map_err(|source| format!("cannot read index progress: {source}"))?;
+        return Ok((generation, paths));
+    }
+
+    cleanup_staging(connection, workspace_id)?;
+    let generation = generation_id();
+    connection
+        .execute(
+            "UPDATE index_state_v2
+             SET staging_generation = ?2, staging_total_directories = ?3,
+                 staging_completed_directories = 0, status = 'indexing'
+             WHERE workspace_id = ?1",
+            params![workspace_id, generation, total_directories as i64],
+        )
+        .map_err(|source| format!("cannot initialize index progress: {source}"))?;
+    Ok((generation, HashSet::new()))
+}
+
+fn checkpoint_directory(
+    connection: &mut Connection,
+    workspace_id: &str,
+    generation: &str,
+    relative_path: &str,
+    batch: &mut Vec<IndexedFile>,
+) -> Result<(), String> {
+    flush_batch(connection, workspace_id, generation, batch)?;
+    let transaction = connection
+        .transaction()
+        .map_err(|source| format!("cannot start directory checkpoint: {source}"))?;
+    transaction
+        .execute(
+            "INSERT OR IGNORE INTO index_directory_progress
+             (workspace_id, generation_id, relative_path, completed_at)
+             VALUES (?1, ?2, ?3, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+            params![workspace_id, generation, relative_path],
+        )
+        .and_then(|_| {
+            transaction.execute(
+                "UPDATE index_state_v2 SET staging_completed_directories =
+                    (SELECT count(*) FROM index_directory_progress
+                     WHERE workspace_id = ?1 AND generation_id = ?2)
+                 WHERE workspace_id = ?1",
+                params![workspace_id, generation],
+            )
+        })
+        .map_err(|source| format!("cannot save directory checkpoint: {source}"))?;
+    transaction
+        .commit()
+        .map_err(|source| format!("cannot commit directory checkpoint: {source}"))
+}
+
 fn publish_generation(
     connection: &mut Connection,
     workspace_id: &str,
@@ -233,10 +322,24 @@ fn publish_generation(
             "UPDATE index_state_v2 SET active_generation = ?2, status = 'ready',
                  index_version = index_version + 1,
                  last_scan = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-                 last_full_index = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                 last_full_index = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                 staging_generation = NULL, staging_total_directories = NULL,
+                 staging_completed_directories = 0
              WHERE workspace_id = ?1",
             params![workspace_id, generation],
         )
+        .and_then(|_| {
+            transaction.execute(
+                "DELETE FROM index_directory_progress WHERE workspace_id = ?1",
+                params![workspace_id],
+            )
+        })
+        .and_then(|_| {
+            transaction.execute(
+                "DELETE FROM files_v2 WHERE workspace_id = ?1 AND generation_id <> ?2",
+                params![workspace_id, generation],
+            )
+        })
         .and_then(|_| {
             transaction.execute(
                 "UPDATE workspaces SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
@@ -250,8 +353,11 @@ fn publish_generation(
         .map_err(|source| format!("cannot commit index publication: {source}"))
 }
 
-fn cleanup_staging(connection: &Connection, workspace_id: &str) -> Result<(), String> {
-    connection
+fn cleanup_staging(connection: &mut Connection, workspace_id: &str) -> Result<(), String> {
+    let transaction = connection
+        .transaction()
+        .map_err(|source| format!("cannot start incomplete index cleanup: {source}"))?;
+    transaction
         .execute(
             "DELETE FROM files_v2
              WHERE workspace_id = ?1
@@ -259,8 +365,16 @@ fn cleanup_staging(connection: &Connection, workspace_id: &str) -> Result<(), St
                    (SELECT active_generation FROM index_state_v2 WHERE workspace_id = ?1), '')",
             params![workspace_id],
         )
-        .map(|_| ())
-        .map_err(|source| format!("cannot remove incomplete index data: {source}"))
+        .and_then(|_| {
+            transaction.execute(
+                "DELETE FROM index_directory_progress WHERE workspace_id = ?1",
+                params![workspace_id],
+            )
+        })
+        .map_err(|source| format!("cannot remove incomplete index data: {source}"))?;
+    transaction
+        .commit()
+        .map_err(|source| format!("cannot commit incomplete index cleanup: {source}"))
 }
 
 fn read_index_status(connection: &Connection, workspace_id: &str) -> Result<IndexStatus, String> {
@@ -343,6 +457,13 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
                 last_full_index TEXT,
                 status TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS index_directory_progress (
+                workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+                generation_id TEXT NOT NULL,
+                relative_path TEXT NOT NULL,
+                completed_at TEXT NOT NULL,
+                PRIMARY KEY(workspace_id, generation_id, relative_path)
+            );
             CREATE TABLE IF NOT EXISTS files_v2 (
                 workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
                 generation_id TEXT NOT NULL,
@@ -357,12 +478,41 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
             );
             CREATE INDEX IF NOT EXISTS files_v2_search
                 ON files_v2(workspace_id, generation_id, relative_path COLLATE NOCASE);
-            PRAGMA user_version = 3;",
+            PRAGMA user_version = 4;",
         )
         .map_err(|source| format!("schema migration failed: {source}"))?;
+    add_column_if_missing(&transaction, "staging_generation", "TEXT")?;
+    add_column_if_missing(&transaction, "staging_total_directories", "INTEGER")?;
+    add_column_if_missing(
+        &transaction,
+        "staging_completed_directories",
+        "INTEGER NOT NULL DEFAULT 0",
+    )?;
     transaction
         .commit()
         .map_err(|source| format!("cannot commit schema migration: {source}"))
+}
+
+fn add_column_if_missing(
+    connection: &Connection,
+    column: &str,
+    definition: &str,
+) -> Result<(), String> {
+    let exists: i64 = connection
+        .query_row(
+            "SELECT count(*) FROM pragma_table_info('index_state_v2') WHERE name = ?1",
+            params![column],
+            |row| row.get(0),
+        )
+        .map_err(|source| format!("cannot inspect index state schema: {source}"))?;
+    if exists == 0 {
+        connection
+            .execute_batch(&format!(
+                "ALTER TABLE index_state_v2 ADD COLUMN {column} {definition};"
+            ))
+            .map_err(|source| format!("cannot add index state column {column}: {source}"))?;
+    }
+    Ok(())
 }
 
 fn register_workspace(
@@ -507,6 +657,84 @@ mod tests {
             .expect("multi-batch index should build");
 
         assert_eq!(status.indexed_files, 1_005);
+        drop(database);
+        fs::remove_dir_all(test_root).expect("test directory should be removed");
+    }
+
+    #[test]
+    fn build_index_resumes_after_completed_directory() {
+        let test_root = temporary_root();
+        let workspace = test_root.join("workspace");
+        let data = test_root.join("data");
+        fs::create_dir_all(workspace.join("completed")).expect("completed directory should exist");
+        fs::create_dir_all(workspace.join("remaining")).expect("remaining directory should exist");
+        fs::write(workspace.join("completed").join("old.txt"), "old")
+            .expect("completed file should be written");
+        fs::write(workspace.join("remaining").join("new.txt"), "new")
+            .expect("remaining file should be written");
+        let database = WorkspaceDatabase::open_at(&workspace, &data).expect("database should open");
+        {
+            let connection = database.connection.lock().expect("database should lock");
+            connection
+                .execute(
+                    "UPDATE index_state_v2 SET status = 'indexing', staging_generation = 'staging',
+                         staging_total_directories = 3, staging_completed_directories = 1
+                     WHERE workspace_id = ?1",
+                    rusqlite::params![database.info.id],
+                )
+                .expect("staging state should be written");
+            connection
+                .execute(
+                    "INSERT INTO index_directory_progress
+                     (workspace_id, generation_id, relative_path, completed_at)
+                     VALUES (?1, 'staging', 'completed', 'now')",
+                    rusqlite::params![database.info.id],
+                )
+                .expect("directory checkpoint should be written");
+            connection
+                .execute(
+                    "INSERT INTO files_v2
+                     (workspace_id, generation_id, path, relative_path, file_name, extension,
+                      size, mtime, indexed_at)
+                     VALUES (?1, 'staging', ?2, 'completed/old.txt', 'old.txt', 'txt', 3, 0, 'now')",
+                    rusqlite::params![
+                        database.info.id,
+                        workspace.join("completed").join("old.txt").to_string_lossy()
+                    ],
+                )
+                .expect("staged file should be written");
+        }
+        let mut progress = Vec::new();
+
+        let status = database
+            .build_index(&workspace, 3, |completed, _, path| {
+                progress.push((completed, path.to_owned()));
+            })
+            .expect("index should resume");
+        let results = database
+            .search_files(".txt", 20)
+            .expect("index should search");
+
+        assert_eq!(status.indexed_files, 2);
+        assert_eq!(progress, [(2, "remaining".to_owned()), (3, ".".to_owned())]);
+        assert_eq!(results.len(), 2);
+        {
+            let connection = database.connection.lock().expect("database should lock");
+            let checkpoints: i64 = connection
+                .query_row("SELECT count(*) FROM index_directory_progress", [], |row| {
+                    row.get(0)
+                })
+                .expect("checkpoint count should be readable");
+            let staging_generation: Option<String> = connection
+                .query_row(
+                    "SELECT staging_generation FROM index_state_v2 WHERE workspace_id = ?1",
+                    rusqlite::params![database.info.id],
+                    |row| row.get(0),
+                )
+                .expect("staging state should be readable");
+            assert_eq!(checkpoints, 0);
+            assert_eq!(staging_generation, None);
+        }
         drop(database);
         fs::remove_dir_all(test_root).expect("test directory should be removed");
     }
