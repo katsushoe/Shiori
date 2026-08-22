@@ -27,18 +27,19 @@ them with real values; do not enter the angle brackets.
 
 ## Authentication and Environment
 
-Create a bearer token of at least 32 characters and authorize the workspace
-roots. Windows uses `;` between paths.
+Create a bearer token of at least 32 characters and register the workspace
+roots that MCP may access.
 
 ```powershell
 $env:SHIORI_MCP_TOKEN = ([guid]::NewGuid().ToString('N'))
-$env:SHIORI_ALLOWED_WORKSPACES = 'F:\Projects\One;F:\Projects\Two'
+shiori workspace add F:\Projects\One
+shiori workspace add F:\Projects\Two
 shiori doctor
 ```
 
 The client and server processes must receive the same token. Do not write the
-token into a committed configuration file. `workspace add` does not grant MCP
-access; only `SHIORI_ALLOWED_WORKSPACES` defines the server boundary.
+token into a committed configuration file. The central `Workspaces` table
+defines the server boundary.
 
 ## Start the Server
 
@@ -52,9 +53,8 @@ local health endpoint. Keep the server process running while clients use Shiori.
 
 ## Register Clients
 
-Client registration controls where a client can discover Shiori. It does not
-grant filesystem access; `SHIORI_ALLOWED_WORKSPACES` remains the server-side
-authorization boundary.
+Client registration controls where a client can discover Shiori. Filesystem
+access remains restricted to workspaces registered with `shiori workspace add`.
 
 ### Claude Code (recommended)
 
@@ -126,17 +126,17 @@ Merge the output without replacing other Codex settings, ensure Codex receives
 
 ## Multiple Workspaces
 
-Build one persistent SQLite index per authorized workspace:
+Register each workspace. Every index is stored in the unified SQLite database:
 
 ```powershell
-shiori index build --allow F:\Projects\One
-shiori index build --allow F:\Projects\Two
+shiori workspace add F:\Projects\One
+shiori workspace add F:\Projects\Two
 ```
 
 Run the CLI again whenever the file index must be refreshed. MCP tools are
 read-only and never start index operations.
 Client scope and workspace authorization are independent: one registered client
-can access only paths listed in `SHIORI_ALLOWED_WORKSPACES`.
+can access only paths stored in the central `Workspaces` table.
 
 ## Verify the Connection
 
@@ -164,9 +164,8 @@ token must contain at least 32 characters. Restart both processes after changes.
 
 ### Workspace rejected or missing
 
-Use an existing absolute path in `SHIORI_ALLOWED_WORKSPACES`, separated with `;`
-on Windows. Restart the server after changing the list. CLI registrations do not
-authorize MCP access.
+Register an existing absolute directory with `shiori workspace add <path>`, then
+restart the server. Use `shiori workspace list` to inspect the authorization set.
 
 ### Connection refused
 

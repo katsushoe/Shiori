@@ -2,8 +2,9 @@
 
 ## Status
 
-Partially superseded by [ADR 0003](0003-file-search-only-index.md).
-Multi-workspace file search remains; MCP-triggered index updates are removed.
+Partially superseded by [ADR 0003](0003-file-search-only-index.md) and
+[ADR 0004](0004-sqlite-workspace-registry.md). Multi-workspace file search
+remains; MCP-triggered index updates and per-workspace database files are removed.
 
 ## Context
 

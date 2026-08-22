@@ -7,21 +7,19 @@ namespace Shiori.Cli;
 internal static class DoctorRunner
 {
     private const string TokenVariable = "SHIORI_MCP_TOKEN";
-    private const string WorkspacesVariable = "SHIORI_ALLOWED_WORKSPACES";
-
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         WriteIndented = true,
     };
 
-    internal static int Run()
+    internal static async Task<int> RunAsync(CancellationToken cancellationToken = default)
     {
         var checks = new List<DoctorCheck>();
         AddNativeChecks(checks);
         AddDirectoryChecks(checks);
         AddSettingsCheck(checks);
-        AddMcpChecks(checks);
+        await AddMcpChecksAsync(checks, cancellationToken).ConfigureAwait(false);
         var status = checks.Any(check => check.Status == "error")
             ? "error"
             : checks.Any(check => check.Status == "warning") ? "warning" : "ok";
@@ -78,7 +76,9 @@ internal static class DoctorRunner
         }
     }
 
-    private static void AddMcpChecks(List<DoctorCheck> checks)
+    private static async Task AddMcpChecksAsync(
+        List<DoctorCheck> checks,
+        CancellationToken cancellationToken)
     {
         var token = Environment.GetEnvironmentVariable(TokenVariable);
         checks.Add(new DoctorCheck(
@@ -86,21 +86,21 @@ internal static class DoctorRunner
             string.IsNullOrWhiteSpace(token) ? "warning" : token.Length >= 32 ? "ok" : "error",
             string.IsNullOrWhiteSpace(token) ? "not configured" : token.Length >= 32 ? "configured" : "must contain at least 32 characters"));
 
-        var configured = Environment.GetEnvironmentVariable(WorkspacesVariable);
-        if (string.IsNullOrWhiteSpace(configured))
+        try
         {
-            checks.Add(new DoctorCheck("allowed_workspaces", "warning", "not configured"));
-            return;
+            var workspaces = await new WorkspaceRegistry().ListAsync(cancellationToken).ConfigureAwait(false);
+            var valid = workspaces.Count > 0 && workspaces.All(workspace => Directory.Exists(workspace.Path));
+            checks.Add(new DoctorCheck(
+                "registered_workspaces",
+                workspaces.Count == 0 ? "warning" : valid ? "ok" : "error",
+                workspaces.Count == 0
+                    ? "none registered"
+                    : valid ? $"{workspaces.Count} registered" : "contains an unavailable directory"));
         }
-
-        var workspaces = configured.Split(
-            Path.PathSeparator,
-            StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        var valid = workspaces.Length > 0 && workspaces.All(path => Path.IsPathFullyQualified(path) && Directory.Exists(path));
-        checks.Add(new DoctorCheck(
-            "allowed_workspaces",
-            valid ? "ok" : "error",
-            valid ? $"{workspaces.Length} configured" : "contains an unavailable or relative directory"));
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException or Microsoft.Data.Sqlite.SqliteException)
+        {
+            checks.Add(new DoctorCheck("registered_workspaces", "error", exception.Message));
+        }
     }
 
     private static void AddSettingsCheck(List<DoctorCheck> checks)

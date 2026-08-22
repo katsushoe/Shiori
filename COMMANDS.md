@@ -45,8 +45,9 @@ shiori serve [--port <1-65535>]
 ```
 
 `workspace add` registers the workspace and automatically rebuilds its index
-while showing progress in the console. It does not extend
-`SHIORI_ALLOWED_WORKSPACES`.
+while showing progress in the console. Registered workspaces are the MCP access
+boundary. `workspace remove` deletes both the registration and its index.
+If a name matches multiple migrated workspaces, use the workspace ID or absolute path.
 
 ## MCP tools
 

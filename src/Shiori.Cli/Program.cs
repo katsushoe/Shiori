@@ -7,6 +7,7 @@ using Shiori.Core.Integration;
 using Shiori.Native;
 
 ApplicationCulture.Apply();
+InstallationLayout.ApplyDataDirectory();
 return await RunAsync(args).ConfigureAwait(false);
 
 static async Task<int> RunAsync(string[] arguments)
@@ -21,11 +22,11 @@ static async Task<int> RunAsync(string[] arguments)
     {
         return arguments[0] switch
         {
-            "find" => RunFind(arguments[1..]),
-            "index" => RunIndex(arguments[1..]),
+            "find" => await RunFindAsync(arguments[1..]).ConfigureAwait(false),
+            "index" => await RunIndexAsync(arguments[1..]).ConfigureAwait(false),
             "config" => RunConfig(arguments[1..]),
-            "workspace" => RunWorkspace(arguments[1..]),
-            "doctor" => DoctorRunner.Run(),
+            "workspace" => await RunWorkspaceAsync(arguments[1..]).ConfigureAwait(false),
+            "doctor" => await DoctorRunner.RunAsync().ConfigureAwait(false),
             "serve" => await RunServerAsync(arguments[1..]).ConfigureAwait(false),
             _ => Fail(CliText.Format("UnknownCommand", arguments[0])),
         };
@@ -54,7 +55,7 @@ static int RunConfig(string[] arguments)
     return 0;
 }
 
-static int RunWorkspace(string[] arguments)
+static async Task<int> RunWorkspaceAsync(string[] arguments)
 {
     if (arguments.Length == 0)
     {
@@ -63,16 +64,16 @@ static int RunWorkspace(string[] arguments)
     var registry = new WorkspaceRegistry();
     if (arguments[0] == "add" && arguments.Length >= 2)
     {
-        var workspace = registry.Add(arguments[1]);
-        RunIndex(["rebuild", "--allow", workspace.Path]);
+        var workspace = await registry.AddAsync(arguments[1]).ConfigureAwait(false);
+        await RunIndexAsync(["rebuild", "--allow", workspace.Path]).ConfigureAwait(false);
         WriteJson(workspace);
         return 0;
     }
 
     object response = arguments[0] switch
     {
-        "list" => new { workspaces = registry.List() },
-        "remove" when arguments.Length >= 2 => registry.Remove(arguments[1]),
+        "list" => new { workspaces = await registry.ListAsync().ConfigureAwait(false) },
+        "remove" when arguments.Length >= 2 => await registry.RemoveAsync(arguments[1]).ConfigureAwait(false),
         "add" => throw new ArgumentException(CliText.Get("WorkspaceAddPathRequired")),
         "remove" => throw new ArgumentException(CliText.Get("WorkspaceRemoveTargetRequired")),
         _ => throw new ArgumentException(CliText.Format("UnknownWorkspaceCommand", arguments[0])),
@@ -81,14 +82,15 @@ static int RunWorkspace(string[] arguments)
     return 0;
 }
 
-static int RunIndex(string[] arguments)
+static async Task<int> RunIndexAsync(string[] arguments)
 {
     if (arguments.Length == 0)
     {
         return Fail(CliText.Get("IndexCommandRequired"));
     }
-    var workspace = GetOption(arguments, "--allow")
+    var requestedWorkspace = GetOption(arguments, "--allow")
         ?? throw new ArgumentException(CliText.Format("OptionRequired", "--allow"));
+    var workspace = await RequireRegisteredWorkspaceAsync(requestedWorkspace).ConfigureAwait(false);
     using var engine = NativeShioriEngine.Open(workspace);
     if (arguments[0] == "status")
     {
@@ -135,14 +137,15 @@ static void WriteProgress(IndexProgress progress)
     Console.Write($"\r{message}");
 }
 
-static int RunFind(string[] arguments)
+static async Task<int> RunFindAsync(string[] arguments)
 {
     if (arguments.Length == 0)
     {
         return Fail(CliText.Get("FindQueryRequired"));
     }
-    var workspace = GetOption(arguments, "--allow")
+    var requestedWorkspace = GetOption(arguments, "--allow")
         ?? throw new ArgumentException(CliText.Format("OptionRequired", "--allow"));
+    var workspace = await RequireRegisteredWorkspaceAsync(requestedWorkspace).ConfigureAwait(false);
     var limit = int.TryParse(GetOption(arguments, "--limit"), out var parsed) ? parsed : 20;
     using var engine = NativeShioriEngine.Open(workspace);
     WriteJson(new { results = engine.SearchFiles(arguments[0], limit) });
@@ -153,6 +156,19 @@ static Task<int> RunServerAsync(string[] arguments)
 {
     var port = int.TryParse(GetOption(arguments, "--port"), out var parsed) ? parsed : 39473;
     return ShioriHttpServer.RunAsync(port);
+}
+
+static async Task<string> RequireRegisteredWorkspaceAsync(string path)
+{
+    var requestedPath = Path.GetFullPath(path);
+    var workspaces = await new WorkspaceRegistry().ListAsync().ConfigureAwait(false);
+    var workspace = workspaces.FirstOrDefault(item =>
+        string.Equals(
+            Path.GetFullPath(item.Path),
+            requestedPath,
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
+    return workspace?.Path
+        ?? throw new UnauthorizedAccessException($"Workspace is not registered: {path}");
 }
 
 static string? GetOption(string[] arguments, string option)

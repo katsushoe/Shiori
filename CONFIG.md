@@ -17,8 +17,9 @@ default. Set `SHIORI_DATA_HOME` to replace that directory.
 - The Windows installer creates `config\shiori.ini` with the language selected
   during setup. The default for silent installation is `en-US`; set the public
   MSI property `SHIORI_LANGUAGE=ja-JP` to select Japanese.
-- `workspaces.json` is created and updated by `shiori workspace` commands.
-- `indexes\<workspace-id>\shiori.db` is created by index operations.
+- `shiori.db` contains the central `Workspaces` table and every workspace index.
+  Legacy `workspaces.json`, `workspaces.db`, and per-workspace databases are
+  migrated once.
 - Claude and Codex configuration snippets are printed by `shiori config`; the
   user decides where to save or merge them.
 
@@ -45,7 +46,6 @@ JSON field names, logs, and MCP protocol values remain language-neutral.
 | Setting | Required | Type | Default | Constraint |
 | :--- | :--- | :--- | :--- | :--- |
 | `SHIORI_MCP_TOKEN` | For `serve` | String | None | At least 32 characters |
-| `SHIORI_ALLOWED_WORKSPACES` | For `serve` | Path list | None | Existing absolute directories |
 | `SHIORI_DATA_HOME` | No | Absolute path | `<install-root>\data` | Writable directory |
 | `SHIORI_EXCLUDE_PATTERNS` | No | Pattern list | None | `;`-separated gitignore-style patterns |
 
@@ -62,21 +62,10 @@ use the same environment variable in the MCP client process.
 $env:SHIORI_MCP_TOKEN = ([guid]::NewGuid().ToString('N'))
 ```
 
-### `SHIORI_ALLOWED_WORKSPACES`
-
-Authorization boundary for MCP file access. It is a list of existing absolute
-directory paths separated by the OS path-list separator (`;` on Windows). There
-is no default; omission prevents `serve` from starting. CLI `--allow` values and
-workspace registrations do not expand this list.
-
-```powershell
-$env:SHIORI_ALLOWED_WORKSPACES = 'F:\Projects\One;F:\Projects\Two'
-```
-
 ### `SHIORI_DATA_HOME`
 
-Optional absolute directory for `workspaces.json` and per-workspace SQLite
-databases. The default is the `data` directory below the installation root. The
+Optional absolute directory for the unified `shiori.db`. The default is the
+`data` directory below the installation root. The
 directory is created when needed; the current user must be able to write it.
 
 ```powershell
@@ -103,8 +92,9 @@ reads `SHIORI_MCP_TOKEN` from the environment.
 
 ```powershell
 $env:SHIORI_MCP_TOKEN = ([guid]::NewGuid().ToString('N'))
-$env:SHIORI_ALLOWED_WORKSPACES = 'F:\Projects\One;F:\Projects\Two'
 $env:SHIORI_EXCLUDE_PATTERNS = 'generated/**;*.min.js'
+shiori workspace add F:\Projects\One
+shiori workspace add F:\Projects\Two
 shiori doctor
 shiori serve --port 39473
 ```

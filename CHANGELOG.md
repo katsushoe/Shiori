@@ -4,6 +4,13 @@ All notable changes to Shiori are documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Replaced environment-variable workspace authorization, the JSON registry,
+  and per-workspace database files with one central SQLite database.
+- Changed `workspace remove` to cascade-delete only the selected workspace's
+  generated index rows.
+
 ## [2.0.1] - 2026-08-22
 
 ### Changed

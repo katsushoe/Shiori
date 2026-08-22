@@ -9,8 +9,6 @@ namespace Shiori.Cli.Server;
 internal static class ShioriHttpServer
 {
     private const string TokenVariable = "SHIORI_MCP_TOKEN";
-    private const string WorkspacesVariable = "SHIORI_ALLOWED_WORKSPACES";
-
     internal static async Task<int> RunAsync(int port)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(port, 1);
@@ -22,7 +20,8 @@ internal static class ShioriHttpServer
             throw new InvalidOperationException($"{TokenVariable} must contain at least 32 characters.");
         }
 
-        var allowedWorkspaces = ParseAllowedWorkspaces();
+        var registeredWorkspaces = await new WorkspaceRegistry().ListAsync().ConfigureAwait(false);
+        var allowedWorkspaces = ValidateRegisteredWorkspaces(registeredWorkspaces);
 
         var options = new WebApplicationOptions
         {
@@ -81,23 +80,21 @@ internal static class ShioriHttpServer
             IPAddress.TryParse(uri.Host, out var address) && IPAddress.IsLoopback(address);
     }
 
-    private static string[] ParseAllowedWorkspaces()
+    private static string[] ValidateRegisteredWorkspaces(IReadOnlyList<Shiori.Core.Engine.WorkspaceInfo> workspaces)
     {
-        var value = Environment.GetEnvironmentVariable(WorkspacesVariable);
-        if (string.IsNullOrWhiteSpace(value))
+        if (workspaces.Count == 0)
         {
-            throw new InvalidOperationException($"{WorkspacesVariable} must contain at least one workspace.");
+            throw new InvalidOperationException("At least one workspace must be registered with 'shiori workspace add'.");
         }
 
-        var workspaces = value.Split(Path.PathSeparator, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         foreach (var workspace in workspaces)
         {
-            if (!Path.IsPathFullyQualified(workspace) || !Directory.Exists(workspace))
+            if (!Path.IsPathFullyQualified(workspace.Path) || !Directory.Exists(workspace.Path))
             {
-                throw new InvalidOperationException($"Allowed workspace is unavailable: {workspace}");
+                throw new InvalidOperationException($"Registered workspace is unavailable: {workspace.Path}");
             }
         }
 
-        return workspaces;
+        return workspaces.Select(workspace => workspace.Path).ToArray();
     }
 }

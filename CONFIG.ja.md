@@ -16,8 +16,9 @@
 - Windowsインストーラは、セットアップ中に選択した言語を記録した
   `config\shiori.ini`を作成します。サイレントインストールの初期値は`en-US`です。
   日本語を指定する場合は、MSI公開プロパティ`SHIORI_LANGUAGE=ja-JP`を使用します。
-- `workspaces.json`は`shiori workspace`コマンドが作成・更新します。
-- `indexes\<workspace-id>\shiori.db`はインデックス操作が作成します。
+- `shiori.db`には中央`Workspaces`テーブルと全ワークスペースのインデックスを
+  保存します。旧`workspaces.json`、`workspaces.db`、ワークスペース別DBは
+  一度だけ移行します。
 - ClaudeとCodexの設定断片は`shiori config`が標準出力へ表示します。保存または
   統合する場所は利用者が決定します。
 
@@ -44,7 +45,6 @@ MCPプロトコル値は言語に依存しません。
 | 設定 | 必須 | 型 | 既定値 | 制約 |
 | :--- | :--- | :--- | :--- | :--- |
 | `SHIORI_MCP_TOKEN` | `serve`で必須 | 文字列 | なし | 32文字以上 |
-| `SHIORI_ALLOWED_WORKSPACES` | `serve`で必須 | パスリスト | なし | 存在する絶対ディレクトリ |
 | `SHIORI_DATA_HOME` | 任意 | 絶対パス | `<インストールルート>\data` | 書き込み可能なディレクトリ |
 | `SHIORI_EXCLUDE_PATTERNS` | 任意 | パターンリスト | なし | `;`区切りのgitignore形式パターン |
 
@@ -61,19 +61,9 @@ MCPプロトコル値は言語に依存しません。
 $env:SHIORI_MCP_TOKEN = ([guid]::NewGuid().ToString('N'))
 ```
 
-### `SHIORI_ALLOWED_WORKSPACES`
-
-MCPファイルアクセスの認可境界です。存在する絶対ディレクトリをOSのパス区切り
-文字（Windowsでは`;`）で連結します。既定値はなく、省略すると`serve`は起動
-しません。CLIの`--allow`やワークスペース登録はこのリストを拡張しません。
-
-```powershell
-$env:SHIORI_ALLOWED_WORKSPACES = 'F:\Projects\One;F:\Projects\Two'
-```
-
 ### `SHIORI_DATA_HOME`
 
-`workspaces.json`とワークスペース別SQLiteデータベースを保存する任意の絶対
+統合SQLiteデータベース`shiori.db`を保存する任意の絶対
 ディレクトリです。既定値はインストールルート直下の`data`です。必要時に作成される
 ため、現在のユーザーに書き込み権限が必要です。
 
@@ -101,8 +91,9 @@ Shioriに名前付き実行プロファイルはありません。Claude Codeと
 
 ```powershell
 $env:SHIORI_MCP_TOKEN = ([guid]::NewGuid().ToString('N'))
-$env:SHIORI_ALLOWED_WORKSPACES = 'F:\Projects\One;F:\Projects\Two'
 $env:SHIORI_EXCLUDE_PATTERNS = 'generated/**;*.min.js'
+shiori workspace add F:\Projects\One
+shiori workspace add F:\Projects\Two
 shiori doctor
 shiori serve --port 39473
 ```

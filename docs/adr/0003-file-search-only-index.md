@@ -55,7 +55,7 @@ and acceptance criteria are defined in
 
 ## Security conditions
 
-- `SHIORI_ALLOWED_WORKSPACES` remains the MCP authorization boundary.
+- Workspace authorization follows [ADR 0004](0004-sqlite-workspace-registry.md).
 - Index traversal does not follow symbolic links or directory junctions.
 - Excluded paths are neither indexed nor emitted in progress output.
 - File contents, queries, and bearer tokens are never persisted by indexing.

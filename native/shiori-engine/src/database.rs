@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 const BATCH_FILE_LIMIT: usize = 1_000;
 const BATCH_BYTE_LIMIT: usize = 16 * 1024 * 1024;
 const BATCH_TIME_LIMIT: Duration = Duration::from_secs(2);
@@ -50,10 +50,9 @@ impl WorkspaceDatabase {
     fn open_at(root: &Path, data_root: &Path) -> Result<Self, String> {
         let normalized_path = normalize_path(root);
         let workspace_id = workspace_id(&normalized_path);
-        let database_directory = data_root.join("indexes").join(&workspace_id);
-        std::fs::create_dir_all(&database_directory)
-            .map_err(|source| format!("cannot create index directory: {source}"))?;
-        let database_path = database_directory.join("shiori.db");
+        std::fs::create_dir_all(data_root)
+            .map_err(|source| format!("cannot create data directory: {source}"))?;
+        let database_path = data_root.join("shiori.db");
         let mut connection = Connection::open(&database_path)
             .map_err(|source| format!("cannot open workspace database: {source}"))?;
         configure(&connection)?;
@@ -358,7 +357,7 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
             );
             CREATE INDEX IF NOT EXISTS files_v2_search
                 ON files_v2(workspace_id, generation_id, relative_path COLLATE NOCASE);
-            PRAGMA user_version = 2;",
+            PRAGMA user_version = 3;",
         )
         .map_err(|source| format!("schema migration failed: {source}"))?;
     transaction
@@ -509,6 +508,54 @@ mod tests {
 
         assert_eq!(status.indexed_files, 1_005);
         drop(database);
+        fs::remove_dir_all(test_root).expect("test directory should be removed");
+    }
+
+    #[test]
+    fn unified_database_isolates_workspace_indexes() {
+        let test_root = temporary_root();
+        let first_workspace = test_root.join("first");
+        let second_workspace = test_root.join("second");
+        let data = test_root.join("data");
+        fs::create_dir_all(&first_workspace).expect("first workspace should be created");
+        fs::create_dir_all(&second_workspace).expect("second workspace should be created");
+        fs::write(first_workspace.join("first.txt"), []).expect("first file should be written");
+        fs::write(second_workspace.join("second.txt"), []).expect("second file should be written");
+        let first = WorkspaceDatabase::open_at(&first_workspace, &data)
+            .expect("first database should open");
+        let second = WorkspaceDatabase::open_at(&second_workspace, &data)
+            .expect("second database should open");
+
+        first
+            .build_index(&first_workspace, 1, |_, _, _| {})
+            .expect("first index should build");
+        second
+            .build_index(&second_workspace, 1, |_, _, _| {})
+            .expect("second index should build");
+
+        assert_eq!(first.info().database_path, second.info().database_path);
+        assert_eq!(
+            first
+                .search_files("first", 20)
+                .expect("first search should work")
+                .len(),
+            1
+        );
+        assert!(
+            first
+                .search_files("second", 20)
+                .expect("isolated search should work")
+                .is_empty()
+        );
+        assert_eq!(
+            second
+                .search_files("second", 20)
+                .expect("second search should work")
+                .len(),
+            1
+        );
+        drop(first);
+        drop(second);
         fs::remove_dir_all(test_root).expect("test directory should be removed");
     }
 

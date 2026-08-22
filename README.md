@@ -4,8 +4,8 @@
 
 Shiori is a fast, local-first file search server for AI coding agents. It
 indexes file names, paths, and metadata without opening file contents.
-The server exposes a single Streamable HTTP MCP endpoint and keeps independent
-SQLite indexes for each workspace.
+The server exposes a single Streamable HTTP MCP endpoint and keeps every
+workspace index isolated by workspace ID in one SQLite database.
 
 Product version: `2.0.1`.
 
@@ -68,28 +68,30 @@ The publish script writes the installer, ZIP, and checksum files to
 
 ## Configuration
 
-Create a random token of at least 32 characters and list every directory that
-the MCP server may access. Windows separates workspace paths with `;`.
+Create a random token of at least 32 characters and register every directory
+that the MCP server may access.
 
 ```powershell
 $env:SHIORI_MCP_TOKEN = ([guid]::NewGuid().ToString('N'))
-$env:SHIORI_ALLOWED_WORKSPACES = 'F:\Projects\ProjectA;F:\Projects\ProjectB'
+shiori workspace add F:\Projects\ProjectA
+shiori workspace add F:\Projects\ProjectB
 shiori doctor
 ```
 
-Persist these values using a secure user-level environment configuration if
-the server must survive terminal restarts. Registrations made by `workspace add`
-do not grant MCP access. See [CONFIG.md](CONFIG.md) for every setting.
+Persist the token using a secure user-level environment configuration if the
+server must survive terminal restarts. Registered workspaces are the MCP access
+boundary. See [CONFIG.md](CONFIG.md) for every setting.
 
 ## Usage
 
-### Build the Initial Index
+### Register and Build the Initial Index
 
-Build one independent index for each workspace before the first search:
+Register each workspace before the first search. Registration automatically
+builds its independent index:
 
 ```powershell
-shiori index build --allow F:\Projects\ProjectA
-shiori index build --allow F:\Projects\ProjectB
+shiori workspace add F:\Projects\ProjectA
+shiori workspace add F:\Projects\ProjectB
 shiori index status --allow F:\Projects\ProjectA
 ```
 

@@ -5,8 +5,8 @@
 Shioriは、AIコーディングエージェント向けの高速なローカルファースト・
 ファイル検索サーバーです。ファイル本文を開かず、ファイル名、パス、
 メタデータだけを索引化します。単一のStreamable HTTP MCP
-エンドポイントを公開し、ワークスペースごとに独立したSQLiteインデックスを
-保持します。
+エンドポイントを公開し、単一SQLiteデータベース内でワークスペースIDごとに
+インデックスを分離します。
 
 製品バージョン: `2.0.1`
 
@@ -71,27 +71,29 @@ WiX Toolset CLIを導入していない場合は`-SkipInstaller`を指定して�
 ## 設定
 
 32文字以上のランダムなトークンを作成し、MCPサーバーからのアクセスを許可する
-全ディレクトリを設定します。Windowsでは複数のパスを`;`で区切ります。
+全ディレクトリを登録します。
 
 ```powershell
 $env:SHIORI_MCP_TOKEN = ([guid]::NewGuid().ToString('N'))
-$env:SHIORI_ALLOWED_WORKSPACES = 'F:\Projects\ProjectA;F:\Projects\ProjectB'
+shiori workspace add F:\Projects\ProjectA
+shiori workspace add F:\Projects\ProjectB
 shiori doctor
 ```
 
 ターミナルを閉じた後もサーバーを利用する場合は、安全なユーザー環境設定へ
-値を永続化してください。`workspace add`による登録はMCPアクセスを許可しません。
+トークンを永続化してください。登録済みワークスペースがMCPアクセス境界です。
 全設定は[CONFIG.md（英語）](CONFIG.md)を参照してください。
 
 ## 使用方法
 
-### 初期インデックスの作成
+### ワークスペース登録と初期インデックスの作成
 
-最初の検索前に、ワークスペースごとに独立したインデックスを作成します。
+最初の検索前にワークスペースを登録します。登録時に独立したインデックスを
+自動作成します。
 
 ```powershell
-shiori index build --allow F:\Projects\ProjectA
-shiori index build --allow F:\Projects\ProjectB
+shiori workspace add F:\Projects\ProjectA
+shiori workspace add F:\Projects\ProjectB
 shiori index status --allow F:\Projects\ProjectA
 ```
 
