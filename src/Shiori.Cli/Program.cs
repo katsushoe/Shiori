@@ -123,7 +123,7 @@ static async Task<int> RunIndexAsync(string[] arguments)
         }
         throw;
     }
-    _ = status;
+    Console.WriteLine(CliText.Format("IndexComplete", workspace, status.IndexedFiles));
     return 0;
 }
 

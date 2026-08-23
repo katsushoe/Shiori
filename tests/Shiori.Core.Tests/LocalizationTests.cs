@@ -18,6 +18,14 @@ public sealed class LocalizationTests : IDisposable
     }
 
     [Fact]
+    public void Get_WhenIndexCompletes_ReturnsLocalizedCompletionText()
+    {
+        var result = CliText.Get("IndexComplete", CultureInfo.GetCultureInfo("ja-JP"));
+
+        Assert.Equal("インデクス作成が終了しました：{0}（{1}ファイル）", result);
+    }
+
+    [Fact]
     public void Apply_WhenJapaneseIsConfigured_ChangesCurrentUiCulture()
     {
         Directory.CreateDirectory(_directory);
