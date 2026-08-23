@@ -18,6 +18,7 @@
   <data name="FindQueryRequired" xml:space="preserve"><value>findにはクエリが必要です。</value></data>
   <data name="IndexStart" xml:space="preserve"><value>インデクスを作成します：{0}</value></data>
   <data name="IndexProgress" xml:space="preserve"><value>{0}% {1}</value></data>
+  <data name="IndexComplete" xml:space="preserve"><value>インデクス作成が終了しました：{0}（{1}ファイル）</value></data>
   <data name="Usage" xml:space="preserve"><value>使用方法:
     shiori version
     shiori find &lt;クエリ&gt; [--allow &lt;ディレクトリ&gt; ...] [--limit &lt;1-100&gt;]
