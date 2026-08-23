@@ -132,6 +132,8 @@ static void WriteProgress(IndexProgress progress)
     Console.WriteLine(CliText.Format(
         "IndexProgress",
         progress.Percent,
+        progress.CompletedDirectories,
+        progress.TotalDirectories,
         IndexPathFormatter.FormatAbsolute(progress.Path)));
 }
 

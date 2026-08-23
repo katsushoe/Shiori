@@ -4,6 +4,13 @@ All notable changes to Shiori are documented in this file.
 
 ## [Unreleased]
 
+## [2.3.6] - 2026-08-23
+
+### Changed
+
+- Changed localized index progress output to show percentage,
+  completed/total directories, and the current absolute file path.
+
 ## [2.3.5] - 2026-08-23
 
 ### Added

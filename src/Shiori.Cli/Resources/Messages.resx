@@ -18,7 +18,7 @@
   <data name="UnknownIndexCommand" xml:space="preserve"><value>Unknown index command: {0}</value></data>
   <data name="FindQueryRequired" xml:space="preserve"><value>find requires a query.</value></data>
   <data name="IndexStart" xml:space="preserve"><value>Creating index: {0}</value></data>
-  <data name="IndexProgress" xml:space="preserve"><value>{0}% {1}</value></data>
+  <data name="IndexProgress" xml:space="preserve"><value>{0}% {1}/{2} {3}</value></data>
   <data name="IndexComplete" xml:space="preserve"><value>Index creation completed: {0} ({1} files)</value></data>
   <data name="Usage" xml:space="preserve"><value>Usage:
     shiori version
