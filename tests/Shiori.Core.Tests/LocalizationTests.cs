@@ -25,6 +25,16 @@ public sealed class LocalizationTests : IDisposable
         Assert.Equal("インデクス作成が終了しました：{0}（{1}ファイル）", result);
     }
 
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("ja-JP")]
+    public void Get_WhenIndexProgressIsSelected_ReturnsDirectoryProgressFormat(string culture)
+    {
+        var result = CliText.Get("IndexProgress", CultureInfo.GetCultureInfo(culture));
+
+        Assert.Equal("{0}% {1}/{2} {3}", result);
+    }
+
     [Fact]
     public void Apply_WhenJapaneseIsConfigured_ChangesCurrentUiCulture()
     {
