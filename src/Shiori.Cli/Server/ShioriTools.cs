@@ -29,7 +29,7 @@ internal sealed class ShioriTools
         registry.ListWorkspaces();
 
     [McpServerTool(Name = "index_status", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-    [Description("Returns the persistent file-index state for an allowed workspace.")]
+    [Description("Returns persistent index state, including indexed file and directory counts, for an allowed workspace.")]
     public static IndexStatus GetIndexStatus(
         [Description("Absolute path of the allowed workspace.")] string workspace,
         NativeEngineRegistry registry,

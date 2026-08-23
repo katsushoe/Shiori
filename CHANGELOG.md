@@ -4,6 +4,17 @@ All notable changes to Shiori are documented in this file.
 
 ## [Unreleased]
 
+## [2.3.5] - 2026-08-23
+
+### Added
+
+- Added the persisted indexed directory count to CLI and MCP index status output.
+
+### Changed
+
+- Changed CLI index status, build, and rebuild commands to use one positional
+  workspace argument while retaining the legacy `--allow` form for compatibility.
+
 ## [2.3.4] - 2026-08-23
 
 ### Fixed

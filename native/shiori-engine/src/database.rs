@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-const SCHEMA_VERSION: i64 = 4;
+const SCHEMA_VERSION: i64 = 5;
 const BATCH_FILE_LIMIT: usize = 1_000;
 const BATCH_BYTE_LIMIT: usize = 16 * 1024 * 1024;
 const BATCH_TIME_LIMIT: Duration = Duration::from_secs(2);
@@ -31,6 +31,7 @@ pub struct IndexStatus {
     pub workspace_id: String,
     pub status: String,
     pub indexed_files: i64,
+    pub indexed_directories: Option<i64>,
     pub index_version: i64,
     pub last_scan: Option<String>,
     pub last_full_index: Option<String>,
@@ -330,6 +331,9 @@ fn publish_generation(
         .execute(
             "UPDATE index_state_v2 SET active_generation = ?2, status = 'ready',
                  index_version = index_version + 1,
+                 indexed_directories =
+                    (SELECT count(*) FROM index_directory_progress
+                     WHERE workspace_id = ?1 AND generation_id = ?2),
                  last_scan = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
                  last_full_index = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
                  staging_generation = NULL, staging_total_directories = NULL,
@@ -393,7 +397,8 @@ fn read_index_status(connection: &Connection, workspace_id: &str) -> Result<Inde
                     (SELECT count(*) FROM files_v2 AS files
                      WHERE files.workspace_id = state.workspace_id
                        AND files.generation_id = state.active_generation),
-                    state.index_version, state.last_scan, state.last_full_index
+                    state.indexed_directories, state.index_version,
+                    state.last_scan, state.last_full_index
              FROM index_state_v2 AS state WHERE state.workspace_id = ?1",
             params![workspace_id],
             |row| {
@@ -401,9 +406,10 @@ fn read_index_status(connection: &Connection, workspace_id: &str) -> Result<Inde
                     workspace_id: row.get(0)?,
                     status: row.get(1)?,
                     indexed_files: row.get(2)?,
-                    index_version: row.get(3)?,
-                    last_scan: row.get(4)?,
-                    last_full_index: row.get(5)?,
+                    indexed_directories: row.get(3)?,
+                    index_version: row.get(4)?,
+                    last_scan: row.get(5)?,
+                    last_full_index: row.get(6)?,
                 })
             },
         )
@@ -487,7 +493,7 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
             );
             CREATE INDEX IF NOT EXISTS files_v2_search
                 ON files_v2(workspace_id, generation_id, relative_path COLLATE NOCASE);
-            PRAGMA user_version = 4;",
+            PRAGMA user_version = 5;",
         )
         .map_err(|source| format!("schema migration failed: {source}"))?;
     add_column_if_missing(&transaction, "staging_generation", "TEXT")?;
@@ -497,6 +503,7 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
         "staging_completed_directories",
         "INTEGER NOT NULL DEFAULT 0",
     )?;
+    add_column_if_missing(&transaction, "indexed_directories", "INTEGER")?;
     transaction
         .commit()
         .map_err(|source| format!("cannot commit schema migration: {source}"))
@@ -644,6 +651,7 @@ mod tests {
 
         assert_eq!(status.status, "ready");
         assert_eq!(status.indexed_files, 1);
+        assert_eq!(status.indexed_directories, Some(2));
         assert_eq!(progress.len(), 2);
         assert_eq!(progress[0].0, 0);
         assert_eq!(progress[1].0, 2);
@@ -674,6 +682,7 @@ mod tests {
             .expect("multi-batch index should build");
 
         assert_eq!(status.indexed_files, 1_005);
+        assert_eq!(status.indexed_directories, Some(1));
         drop(database);
         fs::remove_dir_all(test_root).expect("test directory should be removed");
     }
@@ -733,6 +742,7 @@ mod tests {
             .expect("index should search");
 
         assert_eq!(status.indexed_files, 2);
+        assert_eq!(status.indexed_directories, Some(3));
         assert_eq!(progress.len(), 2);
         assert_eq!(progress[0].0, 1);
         assert_eq!(progress[1].0, 3);

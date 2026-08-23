@@ -10,7 +10,7 @@ use std::slice;
 mod database;
 mod index;
 
-const ABI_VERSION: u32 = 4;
+const ABI_VERSION: u32 = 5;
 const STATUS_INVALID_ARGUMENT: i32 = 1;
 const STATUS_IO: i32 = 2;
 const STATUS_PANIC: i32 = 255;

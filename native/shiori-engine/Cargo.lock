@@ -395,7 +395,7 @@ dependencies = [
 
 [[package]]
 name = "shiori-engine"
-version = "2.3.3"
+version = "2.3.5"
 dependencies = [
  "ignore",
  "rusqlite",
