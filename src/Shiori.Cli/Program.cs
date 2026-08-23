@@ -71,7 +71,7 @@ static async Task<int> RunWorkspaceAsync(string[] arguments)
     if (arguments[0] == "add" && arguments.Length >= 2)
     {
         var workspace = await registry.AddAsync(arguments[1]).ConfigureAwait(false);
-        await RunIndexAsync(["rebuild", "--allow", workspace.Path]).ConfigureAwait(false);
+        await RunIndexAsync(["rebuild", workspace.Path]).ConfigureAwait(false);
         WriteJson(workspace);
         return 0;
     }
@@ -94,8 +94,8 @@ static async Task<int> RunIndexAsync(string[] arguments)
     {
         return Fail(CliText.Get("IndexCommandRequired"));
     }
-    var requestedWorkspace = GetOption(arguments, "--allow")
-        ?? throw new ArgumentException(CliText.Format("OptionRequired", "--allow"));
+    var requestedWorkspace = IndexCommandArguments.GetWorkspace(arguments)
+        ?? throw new ArgumentException(CliText.Get("IndexWorkspaceRequired"));
     var workspace = await RequireRegisteredWorkspaceAsync(requestedWorkspace).ConfigureAwait(false);
     using var engine = NativeShioriEngine.Open(workspace);
     if (arguments[0] == "status")

@@ -91,6 +91,6 @@ public sealed class WorkspaceCoordinatorTests
         public void Dispose() { }
 
         private IndexStatus Status() => new(
-            Info.Id, "ready", 1, 1, null, null);
+            Info.Id, "ready", 1, 1, 1, null, null);
     }
 }

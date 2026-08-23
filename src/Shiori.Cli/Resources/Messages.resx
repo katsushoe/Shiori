@@ -14,6 +14,7 @@
   <data name="WorkspaceRemoveTargetRequired" xml:space="preserve"><value>workspace remove requires a name, ID, or absolute directory.</value></data>
   <data name="UnknownWorkspaceCommand" xml:space="preserve"><value>Unknown workspace command: {0}</value></data>
   <data name="IndexCommandRequired" xml:space="preserve"><value>index requires build, status, or rebuild.</value></data>
+  <data name="IndexWorkspaceRequired" xml:space="preserve"><value>index requires a registered workspace path.</value></data>
   <data name="UnknownIndexCommand" xml:space="preserve"><value>Unknown index command: {0}</value></data>
   <data name="FindQueryRequired" xml:space="preserve"><value>find requires a query.</value></data>
   <data name="IndexStart" xml:space="preserve"><value>Creating index: {0}</value></data>
@@ -22,9 +23,9 @@
   <data name="Usage" xml:space="preserve"><value>Usage:
     shiori version
     shiori find &lt;query&gt; [--allow &lt;directory&gt; ...] [--limit &lt;1-100&gt;]
-  shiori index build --allow &lt;directory&gt;
-  shiori index status --allow &lt;directory&gt;
-  shiori index rebuild --allow &lt;directory&gt;
+  shiori index build &lt;directory&gt;
+  shiori index status &lt;directory&gt;
+  shiori index rebuild &lt;directory&gt;
   shiori workspace add &lt;absolute-directory&gt;
   shiori workspace list
   shiori workspace remove &lt;name-or-id-or-absolute-directory&gt;

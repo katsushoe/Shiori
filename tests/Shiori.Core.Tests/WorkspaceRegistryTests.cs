@@ -25,6 +25,11 @@ public sealed class WorkspaceRegistryTests : IDisposable
             "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN " +
             "('Workspaces', 'index_state_v2', 'files_v2', 'index_directory_progress');";
         Assert.Equal(4L, await command.ExecuteScalarAsync(CancellationToken.None));
+        command.CommandText = "PRAGMA user_version;";
+        Assert.Equal(5L, await command.ExecuteScalarAsync(CancellationToken.None));
+        command.CommandText =
+            "SELECT count(*) FROM pragma_table_info('index_state_v2') WHERE name = 'indexed_directories';";
+        Assert.Equal(1L, await command.ExecuteScalarAsync(CancellationToken.None));
     }
 
     [Fact]
@@ -42,7 +47,7 @@ public sealed class WorkspaceRegistryTests : IDisposable
 
         var workspaces = await registry.ListAsync(CancellationToken.None);
 
-        Assert.Equal([workspace with { DatabasePath = registry.DatabasePath, SchemaVersion = 4 }], workspaces);
+        Assert.Equal([workspace with { DatabasePath = registry.DatabasePath, SchemaVersion = 5 }], workspaces);
         Assert.False(File.Exists(legacyPath));
         Assert.True(File.Exists($"{legacyPath}.migrated"));
     }
@@ -57,11 +62,14 @@ public sealed class WorkspaceRegistryTests : IDisposable
 
         var workspaces = await registry.ListAsync(CancellationToken.None);
 
-        Assert.Equal([workspace with { DatabasePath = registry.DatabasePath, SchemaVersion = 4 }], workspaces);
+        Assert.Equal([workspace with { DatabasePath = registry.DatabasePath, SchemaVersion = 5 }], workspaces);
         Assert.False(Directory.Exists(Path.Combine(_dataRoot, "indexes")));
         await using var connection = await OpenAsync(registry.DatabasePath);
         Assert.Equal(1L, await CountAsync(connection, "files_v2"));
         Assert.Equal(1L, await CountAsync(connection, "index_state_v2"));
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT indexed_directories IS NULL FROM index_state_v2;";
+        Assert.Equal(1L, await command.ExecuteScalarAsync(CancellationToken.None));
     }
 
     [Fact]
@@ -76,9 +84,9 @@ public sealed class WorkspaceRegistryTests : IDisposable
 
         var removed = await registry.RemoveAsync(removedWorkspace.Id, CancellationToken.None);
 
-        Assert.Equal(removedWorkspace with { DatabasePath = registry.DatabasePath, SchemaVersion = 4 }, removed);
+        Assert.Equal(removedWorkspace with { DatabasePath = registry.DatabasePath, SchemaVersion = 5 }, removed);
         Assert.Equal(
-            [retainedWorkspace with { DatabasePath = registry.DatabasePath, SchemaVersion = 4 }],
+            [retainedWorkspace with { DatabasePath = registry.DatabasePath, SchemaVersion = 5 }],
             await registry.ListAsync(CancellationToken.None));
         await using var connection = await OpenAsync(registry.DatabasePath);
         Assert.Equal(1L, await CountAsync(connection, "files_v2"));
@@ -129,7 +137,7 @@ public sealed class WorkspaceRegistryTests : IDisposable
         var result = await registry.ListInterruptedAsync(CancellationToken.None);
 
         Assert.Equal(
-            [interrupted with { DatabasePath = registry.DatabasePath, SchemaVersion = 4 }],
+            [interrupted with { DatabasePath = registry.DatabasePath, SchemaVersion = 5 }],
             result);
     }
 

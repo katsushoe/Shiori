@@ -14,6 +14,7 @@
   <data name="WorkspaceRemoveTargetRequired" xml:space="preserve"><value>workspace removeには名前、ID、絶対ディレクトリパスのいずれかが必要です。</value></data>
   <data name="UnknownWorkspaceCommand" xml:space="preserve"><value>不明なworkspaceコマンドです: {0}</value></data>
   <data name="IndexCommandRequired" xml:space="preserve"><value>indexにはbuild、status、rebuildのいずれかが必要です。</value></data>
+  <data name="IndexWorkspaceRequired" xml:space="preserve"><value>indexには登録済みワークスペースパスが必要です。</value></data>
   <data name="UnknownIndexCommand" xml:space="preserve"><value>不明なindexコマンドです: {0}</value></data>
   <data name="FindQueryRequired" xml:space="preserve"><value>findにはクエリが必要です。</value></data>
   <data name="IndexStart" xml:space="preserve"><value>インデクスを作成します：{0}</value></data>
@@ -22,9 +23,9 @@
   <data name="Usage" xml:space="preserve"><value>使用方法:
     shiori version
     shiori find &lt;クエリ&gt; [--allow &lt;ディレクトリ&gt; ...] [--limit &lt;1-100&gt;]
-  shiori index build --allow &lt;ディレクトリ&gt;
-  shiori index status --allow &lt;ディレクトリ&gt;
-  shiori index rebuild --allow &lt;ディレクトリ&gt;
+  shiori index build &lt;ディレクトリ&gt;
+  shiori index status &lt;ディレクトリ&gt;
+  shiori index rebuild &lt;ディレクトリ&gt;
   shiori workspace add &lt;絶対ディレクトリ&gt;
   shiori workspace list
   shiori workspace remove &lt;名前、ID、絶対ディレクトリ&gt;

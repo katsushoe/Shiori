@@ -8,7 +8,7 @@ namespace Shiori.Cli;
 /// <summary>Persists registered workspaces and all file indexes in one SQLite database.</summary>
 internal sealed class WorkspaceRegistry
 {
-    private const int SchemaVersion = 4;
+    private const int SchemaVersion = 5;
     private const string DatabaseFileName = "shiori.db";
     private const string LegacyRegistryFileName = "workspaces.json";
     private const string LegacySqliteRegistryFileName = "workspaces.db";
@@ -224,7 +224,12 @@ internal sealed class WorkspaceRegistry
             "staging_completed_directories",
             "INTEGER NOT NULL DEFAULT 0",
             cancellationToken).ConfigureAwait(false);
-        await ExecuteAsync(connection, "PRAGMA user_version = 4;", cancellationToken).ConfigureAwait(false);
+        await AddColumnIfMissingAsync(
+            connection,
+            "indexed_directories",
+            "INTEGER",
+            cancellationToken).ConfigureAwait(false);
+        await ExecuteAsync(connection, "PRAGMA user_version = 5;", cancellationToken).ConfigureAwait(false);
 
         await MigrateLegacySqliteRegistryAsync(connection, cancellationToken).ConfigureAwait(false);
         await MigrateLegacyJsonRegistryAsync(connection, cancellationToken).ConfigureAwait(false);

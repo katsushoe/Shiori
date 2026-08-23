@@ -8,7 +8,7 @@ Shioriは、AIコーディングエージェント向けの高速なローカル
 エンドポイントを公開し、単一SQLiteデータベース内でワークスペースIDごとに
 インデックスを分離します。
 
-製品バージョン: `2.3.4`
+製品バージョン: `2.3.5`
 
 ## はじめに
 
@@ -22,7 +22,7 @@ Shioriは、AIコーディングエージェント向けの高速なローカル
 ### Windowsインストーラ
 
 [最新リリース](https://github.com/katsushoe/Shiori/releases/latest)から
-`shiori-v2.3.4-win-x64-setup.msi`をダウンロードして実行します。
+`shiori-v2.3.5-win-x64-setup.msi`をダウンロードして実行します。
 **Add Shiori to the current user's PATH**を選択したまま進めてください。
 インストーラは自己完結型で、現在のユーザーにのみインストールされます。
 指定したインストールルートの下に`bin`、`config`、`logs`、`data`を作成し、
@@ -37,14 +37,14 @@ shiori doctor
 
 ### ZIPバイナリ
 
-最新リリースから`shiori-v2.3.4-win-x64.zip`と隣接するSHA-256ファイルを
+最新リリースから`shiori-v2.3.5-win-x64.zip`と隣接するSHA-256ファイルを
 ダウンロードします。チェックサムを確認して任意の恒久的なインストールルートへ
 展開し、その`bin`ディレクトリをユーザーの`PATH`へ追加してください。ZIPにも
 インストーラと同じ標準構成が含まれ、.NETを別途インストールする必要はありません。
 
 ```powershell
-$expected = (Get-Content .\shiori-v2.3.4-win-x64.zip.sha256).Split()[0]
-$actual = (Get-FileHash .\shiori-v2.3.4-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+$expected = (Get-Content .\shiori-v2.3.5-win-x64.zip.sha256).Split()[0]
+$actual = (Get-FileHash .\shiori-v2.3.5-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($actual -ne $expected) { throw "Checksum mismatch" }
 ```
 
@@ -62,7 +62,7 @@ cargo build --release --manifest-path .\native\shiori-engine\Cargo.toml
 dotnet restore .\Shiori.slnx
 dotnet build .\Shiori.slnx --configuration Release --no-restore
 dotnet test .\tests\Shiori.Core.Tests\Shiori.Core.Tests.csproj --configuration Release --no-build
-.\scripts\Publish-Windows.ps1 -Version 2.3.4
+.\scripts\Publish-Windows.ps1 -Version 2.3.5
 ```
 
 配布スクリプトはインストーラ、ZIP、チェックサムを`artifacts/`へ出力します。
@@ -94,7 +94,7 @@ shiori doctor
 ```powershell
 shiori workspace add F:\Projects\ProjectA
 shiori workspace add F:\Projects\ProjectB
-shiori index status --allow F:\Projects\ProjectA
+shiori index status F:\Projects\ProjectA
 ```
 
 インデックス作成前に対象ディレクトリ数を数え、作成中はディレクトリ単位の
@@ -102,6 +102,8 @@ shiori index status --allow F:\Projects\ProjectA
 ディレクトリごとの完了地点はSQLiteへ保存されます。中断した場合は、サーバー
 起動時に未完了の世代を検出し、直前の完成済みインデックスを維持したまま
 バックグラウンドで自動再開します。
+正常公開後は、`index status`とMCPの`index_status` Toolが、実ディレクトリを
+再走査せずSQLiteの永続状態から`indexed_directories`を返します。
 
 CLIの`version`、`workspace list`、`index status`、`find`はMCPの読み取りToolに
 対応します。`find`は`--allow`省略時に全登録ワークスペースを検索し、複数の

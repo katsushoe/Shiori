@@ -6,7 +6,7 @@ namespace Shiori.Native;
 internal static partial class NativeAbi
 {
     internal const string LibraryName = "shiori_engine";
-    internal const uint SupportedAbiVersion = 4;
+    internal const uint SupportedAbiVersion = 5;
 
     [StructLayout(LayoutKind.Sequential)]
     internal readonly struct NativeBuffer
