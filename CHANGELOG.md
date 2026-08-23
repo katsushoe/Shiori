@@ -10,7 +10,6 @@ All notable changes to Shiori are documented in this file.
 
 - Added a localized completion message with the indexed file count after an
   index is successfully published in Windows Terminal.
-
 ## [2.3.3] - 2026-08-23
 
 ### Fixed
