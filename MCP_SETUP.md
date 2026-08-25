@@ -51,6 +51,11 @@ The process listens only on loopback. Its MCP endpoint is
 `http://127.0.0.1:39473/mcp`; `http://127.0.0.1:39473/health` is the unauthenticated
 local health endpoint. Keep the server process running while clients use Shiori.
 
+On initialization, Shiori provides server instructions that describe its purpose,
+recommended search workflow, content-search limitation, and mutation safety rules.
+MCP clients that support prompts can also open `shiori_guide` for a practical guide
+to searching, index maintenance, and workspace administration.
+
 ## Register Clients
 
 Client registration controls where a client can discover Shiori. Filesystem

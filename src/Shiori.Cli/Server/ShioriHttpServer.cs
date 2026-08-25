@@ -38,9 +38,12 @@ internal static class ShioriHttpServer
         builder.Services.AddSingleton<WorkspaceCoordinator>();
         builder.Services.AddSingleton<IIndexTerminalLauncher, WindowsTerminalIndexLauncher>();
         builder.Services.AddHostedService<InterruptedIndexResumeService>();
+        builder.Services.Configure<McpServerOptions>(options =>
+            options.ServerInstructions = ShioriPrompts.ServerInstructions);
         builder.Services.AddMcpServer()
             .WithHttpTransport(transport => transport.Stateless = true)
-            .WithTools<ShioriTools>();
+            .WithTools<ShioriTools>()
+            .WithPrompts<ShioriPrompts>();
 
         var app = builder.Build();
         _ = app.Services.GetRequiredService<NativeEngineRegistry>();
