@@ -4,6 +4,15 @@ All notable changes to Shiori are documented in this file.
 
 ## [Unreleased]
 
+## [2.3.8] - 2026-08-26
+
+### Added
+
+- Added MCP server instructions that explain Shiori's purpose, recommended
+  search workflow, content-search limitation, and mutation safety rules.
+- Added the `shiori_guide` MCP prompt with practical search, index maintenance,
+  workspace administration, and safety guidance.
+
 ## [2.3.7] - 2026-08-25
 
 ### Added
