@@ -45,7 +45,22 @@ public sealed class WorkspaceCoordinator
             .Where(response => response.Error is not null)
             .Select(response => response.Error!)
             .ToArray();
-        return new WorkspaceSearchFilesResponse(results, errors);
+        var summaries = responses.Select(response => new WorkspaceSearchSummary(
+            response.Info.Id,
+            response.Info.Name,
+            response.Info.Path,
+            response.Status.IndexedDirectories ?? 0,
+            response.Status.IndexedFiles,
+            response.Error is null ? "OK" : "NG",
+            results.Count(result => string.Equals(
+                result.WorkspaceId,
+                response.Info.Id,
+                StringComparison.Ordinal)),
+            response.Status.Status,
+            GetActionRequired(response.Status, response.Error),
+            GetSuggestedTool(response.Status, response.Error),
+            response.Error?.Message)).ToArray();
+        return new WorkspaceSearchFilesResponse(results, errors, summaries, FormatSummaryTable(summaries));
     }
 
     private async Task<SearchWorkspaceResponse> SearchWorkspaceAsync(
@@ -62,15 +77,29 @@ public sealed class WorkspaceCoordinator
             {
                 var engine = _engines.GetEngine(workspace);
                 var info = engine.GetWorkspaceInfo();
+                var status = engine.GetIndexStatus();
+                if (string.Equals(status.Status, "not_indexed", StringComparison.Ordinal))
+                {
+                    return new SearchWorkspaceResponse(
+                        [],
+                        new WorkspaceOperationError(workspace, "Workspace index has not been created."),
+                        info,
+                        status);
+                }
                 var results = engine.SearchFiles(query, limit).Select(result => new WorkspaceSearchResult(
                     info.Id, info.Name, info.Path, result.Type, result.Path,
                     result.Line, result.Snippet, result.Column)).ToArray();
-                return new SearchWorkspaceResponse(results, null);
+                return new SearchWorkspaceResponse(results, null, info, status);
             }, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            return new SearchWorkspaceResponse([], new WorkspaceOperationError(workspace, exception.Message));
+            var engine = _engines.GetEngine(workspace);
+            return new SearchWorkspaceResponse(
+                [],
+                new WorkspaceOperationError(workspace, exception.Message),
+                engine.GetWorkspaceInfo(),
+                engine.GetIndexStatus());
         }
         finally
         {
@@ -80,6 +109,33 @@ public sealed class WorkspaceCoordinator
 
     private static SemaphoreSlim CreateConcurrencyGate(int workspaceCount) =>
         new(Math.Max(1, Math.Min(workspaceCount, Math.Min(Environment.ProcessorCount, MaximumConcurrency))));
+
+    private static string? GetActionRequired(IndexStatus status, WorkspaceOperationError? error)
+    {
+        if (error is null) return null;
+        return string.Equals(status.Status, "not_indexed", StringComparison.Ordinal)
+            ? "index_build_confirmation"
+            : string.Equals(status.Status, "indexing", StringComparison.Ordinal)
+                ? "index_resume_confirmation"
+                : null;
+    }
+
+    private static string? GetSuggestedTool(IndexStatus status, WorkspaceOperationError? error) =>
+        GetActionRequired(status, error) is null ? null : "index_build";
+
+    private static string FormatSummaryTable(IReadOnlyList<WorkspaceSearchSummary> summaries)
+    {
+        var lines = new List<string>
+        {
+            "| 検索対象ワークスペース名 | 検索対象ディレクトリ数 | 検索対象ファイル数 | 検索結果 | 検索結果ヒット数 | インデックスステータス |",
+            "|---|---:|---:|:---:|---:|---|"
+        };
+        lines.AddRange(summaries.Select(summary =>
+            $"| {EscapeTableCell(summary.WorkspaceName)} | {summary.SearchTargetDirectories} | {summary.SearchTargetFiles} | {summary.SearchResult} | {summary.HitCount} | {EscapeTableCell(summary.IndexStatus)} |"));
+        return string.Join('\n', lines);
+    }
+
+    private static string EscapeTableCell(string value) => value.Replace("|", "\\|", StringComparison.Ordinal);
 
     private static int FileRank(string path, string query)
     {
@@ -92,5 +148,7 @@ public sealed class WorkspaceCoordinator
 
     private sealed record SearchWorkspaceResponse(
         IReadOnlyList<WorkspaceSearchResult> Results,
-        WorkspaceOperationError? Error);
+        WorkspaceOperationError? Error,
+        WorkspaceInfo Info,
+        IndexStatus Status);
 }

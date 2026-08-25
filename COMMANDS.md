@@ -18,6 +18,11 @@ shiori find <query> [--allow <absolute-directory> ...] [--limit <1-100>]
 Searches the ready SQLite file index for a file-name or relative-path fragment.
 Omitting `--allow` searches all registered workspaces. Repeat `--allow` to
 search a selected set. Results and per-workspace errors match MCP `search_files`.
+Every response includes a workspace summary and a Markdown table with workspace
+name, indexed directory and file counts, OK/NG result, returned hit count, and
+index status. A workspace without a published index returns NG and an explicit
+confirmation action; indexing starts only after the user approves a subsequent
+`index_build` call.
 
 ### `shiori index build`
 
@@ -60,7 +65,10 @@ If a name matches multiple migrated workspaces, use the workspace ID or absolute
 - `get_version`: returns the running Shiori name and version.
 - `workspace_list`: lists allowed workspaces and their databases.
 - `index_status`: returns one allowed workspace's index state.
-- `search_files`: searches one, several, or all allowed workspaces.
+- `search_files`: searches one, several, or all allowed workspaces and returns a
+  workspace summary table. Clients must show the table to the user. If the response
+  requests index build or resume confirmation, the client asks the user before
+  calling `index_build`; `search_files` itself remains read-only.
 - `workspace_add`: registers a directory and adds it to the live access boundary.
   On Windows, the MCP server directly opens Windows Terminal and displays initial
   indexing progress. On other platforms, the initial index runs in the MCP request.
