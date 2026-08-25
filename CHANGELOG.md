@@ -4,6 +4,25 @@ All notable changes to Shiori are documented in this file.
 
 ## [Unreleased]
 
+## [2.3.7] - 2026-08-25
+
+### Added
+
+- Added a per-workspace search summary with indexed directory and file counts,
+  OK/NG result, returned hit count, index status, and a Markdown table.
+- Added structured confirmation actions when an initial index must be built or
+  an interrupted index must be resumed before searching.
+
+### Changed
+
+- Changed product and installer publisher metadata to Akatsukisoft.
+- Broadened the documented target from AI coding agents to AI agents.
+
+### Fixed
+
+- Embedded the application cabinet in the MSI so the installer is a complete
+  standalone release asset.
+
 ## [2.3.6] - 2026-08-23
 
 ### Changed

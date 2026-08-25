@@ -17,6 +17,9 @@ public sealed class WorkspaceCoordinatorTests
 
         Assert.Empty(response.Errors);
         Assert.Equal(2, response.Results.Count);
+        Assert.Equal(2, response.Workspaces.Count);
+        Assert.All(response.Workspaces, summary => Assert.Equal("OK", summary.SearchResult));
+        Assert.Contains("| First | 1 | 1 | OK | 1 | ready |", response.SummaryMarkdown, StringComparison.Ordinal);
         Assert.Contains(response.Results, result => result.WorkspaceId == "first" && result.Path == "FirstResult.cs");
         Assert.Contains(response.Results, result => result.WorkspaceId == "second" && result.Path == "SecondResult.cs");
     }
@@ -34,19 +37,61 @@ public sealed class WorkspaceCoordinatorTests
         var error = Assert.Single(response.Errors);
         Assert.Equal(failed.Info.Path, error.Workspace);
         Assert.Equal("search failed", error.Message);
+        var summary = Assert.Single(response.Workspaces, item => item.WorkspaceId == "failed");
+        Assert.Equal("NG", summary.SearchResult);
+        Assert.Equal(0, summary.HitCount);
+        Assert.Null(summary.ActionRequired);
+    }
+
+    [Fact]
+    public async Task SearchFilesAsync_IndexNotCreated_ReturnsSummaryAndConfirmationAction()
+    {
+        var engine = CreateEngine("empty", "Empty", "Ignored.cs", status: "not_indexed");
+        var coordinator = new WorkspaceCoordinator(new FakeProvider(engine));
+
+        var response = await coordinator.SearchFilesAsync("Result", null, 10, CancellationToken.None);
+
+        Assert.Empty(response.Results);
+        Assert.Single(response.Errors);
+        var summary = Assert.Single(response.Workspaces);
+        Assert.Equal("Empty", summary.WorkspaceName);
+        Assert.Equal(0, summary.SearchTargetDirectories);
+        Assert.Equal(0, summary.SearchTargetFiles);
+        Assert.Equal("NG", summary.SearchResult);
+        Assert.Equal(0, summary.HitCount);
+        Assert.Equal("not_indexed", summary.IndexStatus);
+        Assert.Equal("index_build_confirmation", summary.ActionRequired);
+        Assert.Equal("index_build", summary.SuggestedTool);
+    }
+
+    [Fact]
+    public async Task SearchFilesAsync_InterruptedIndexWithoutPublishedGeneration_ReturnsResumeConfirmation()
+    {
+        var engine = CreateEngine("interrupted", "Interrupted", "Ignored.cs", failSearch: true, status: "indexing");
+        var coordinator = new WorkspaceCoordinator(new FakeProvider(engine));
+
+        var response = await coordinator.SearchFilesAsync("Result", null, 10, CancellationToken.None);
+
+        var summary = Assert.Single(response.Workspaces);
+        Assert.Equal("NG", summary.SearchResult);
+        Assert.Equal("indexing", summary.IndexStatus);
+        Assert.Equal("index_resume_confirmation", summary.ActionRequired);
+        Assert.Equal("index_build", summary.SuggestedTool);
     }
 
     private static FakeEngine CreateEngine(
         string id,
         string name,
         string resultPath,
-        bool failSearch = false)
+        bool failSearch = false,
+        string status = "ready")
     {
         var path = Path.GetFullPath(Path.Combine(Path.GetTempPath(), $"shiori-{id}"));
         return new FakeEngine(
             new WorkspaceInfo(id, path, name, Path.Combine(path, "shiori.db"), 1),
             resultPath,
-            failSearch);
+            failSearch,
+            status);
     }
 
     private sealed class FakeProvider(params FakeEngine[] engines) : IWorkspaceEngineProvider
@@ -72,7 +117,8 @@ public sealed class WorkspaceCoordinatorTests
     private sealed class FakeEngine(
         WorkspaceInfo info,
         string resultPath,
-        bool failSearch) : IShioriEngine
+        bool failSearch,
+        string status) : IShioriEngine
     {
         public uint AbiVersion => 3;
         public WorkspaceInfo Info { get; } = info;
@@ -91,6 +137,12 @@ public sealed class WorkspaceCoordinatorTests
         public void Dispose() { }
 
         private IndexStatus Status() => new(
-            Info.Id, "ready", 1, 1, 1, null, null);
+            Info.Id,
+            status,
+            string.Equals(status, "not_indexed", StringComparison.Ordinal) ? 0 : 1,
+            string.Equals(status, "not_indexed", StringComparison.Ordinal) ? 0 : 1,
+            1,
+            null,
+            null);
     }
 }
