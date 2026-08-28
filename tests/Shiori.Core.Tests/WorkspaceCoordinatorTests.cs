@@ -1,5 +1,6 @@
 using Shiori.Cli.Server;
 using Shiori.Core.Engine;
+using System.Text.Json;
 using Xunit;
 
 namespace Shiori.Core.Tests;
@@ -18,10 +19,23 @@ public sealed class WorkspaceCoordinatorTests
         Assert.Empty(response.Errors);
         Assert.Equal(2, response.Results.Count);
         Assert.Equal(2, response.Workspaces.Count);
+        Assert.True(response.ElapsedMilliseconds >= 0);
         Assert.All(response.Workspaces, summary => Assert.Equal("OK", summary.SearchResult));
         Assert.Contains("| First | 1 | 1 | OK | 1 | ready |", response.SummaryMarkdown, StringComparison.Ordinal);
         Assert.Contains(response.Results, result => result.WorkspaceId == "first" && result.Path == "FirstResult.cs");
         Assert.Contains(response.Results, result => result.WorkspaceId == "second" && result.Path == "SecondResult.cs");
+    }
+
+    [Fact]
+    public async Task SearchFilesAsync_WhenSerialized_ContainsElapsedMilliseconds()
+    {
+        var engine = CreateEngine("first", "First", "FirstResult.cs");
+        var coordinator = new WorkspaceCoordinator(new FakeProvider(engine));
+
+        var response = await coordinator.SearchFilesAsync("Result", null, 10, CancellationToken.None);
+        var json = JsonSerializer.Serialize(response, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.Contains("\"elapsedMilliseconds\":", json, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -40,7 +40,7 @@ internal sealed class ShioriTools
     }
 
     [McpServerTool(Name = "search_files", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-    [Description("Searches file names and paths across one, several, or all allowed workspaces. Always present SummaryMarkdown to the user. If a workspace reports an index build or resume confirmation action, ask the user before calling index_build.")]
+    [Description("Searches file names and paths across one, several, or all allowed workspaces. Always present SummaryMarkdown and ElapsedMilliseconds to the user. If a workspace reports an index build or resume confirmation action, ask the user before calling index_build.")]
     public static async Task<WorkspaceSearchFilesResponse> SearchFiles(
         [Description("File name or relative path fragment to search for.")] string query,
         WorkspaceCoordinator coordinator,
@@ -60,7 +60,7 @@ internal sealed class ShioriTools
                 .ConfigureAwait(false);
             stopwatch.Stop();
             logger.LogSearchSucceeded(
-                "search_files", query, workspaceLabel, response.Results.Count, stopwatch.Elapsed.TotalMilliseconds);
+                "search_files", query, workspaceLabel, response.Results.Count, response.ElapsedMilliseconds);
             if (response.Errors.Count > 0)
             {
                 logger.LogSearchPartialErrors(
