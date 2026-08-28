@@ -35,7 +35,9 @@
     <StandardDirectory Id="LocalAppDataFolder">
       <Directory Id="ProgramsFolder" Name="Programs">
         <Directory Id="INSTALLFOLDER" Name="Shiori">
-          <Directory Id="BINFOLDER" Name="bin" />
+          <Directory Id="BINFOLDER" Name="bin">
+            <Directory Id="JAJPFOLDER" Name="ja-JP" />
+          </Directory>
           <Directory Id="CONFIGFOLDER" Name="config" />
           <Directory Id="LOGSFOLDER" Name="logs" />
           <Directory Id="DATAFOLDER" Name="data" />
@@ -43,16 +45,13 @@
       </Directory>
     </StandardDirectory>
 
-    <ComponentGroup Id="BinFiles" Directory="BINFOLDER" Source="$(var.SourceDirectory)\bin">
-      <Files Include="**" />
-    </ComponentGroup>
-
-    <ComponentGroup Id="DocFiles" Directory="INSTALLFOLDER" Source="$(var.SourceDirectory)">
-      <Files Include="README.md" />
-      <Files Include="LICENSE" />
-      <Files Include="CHANGELOG.md" />
-      <Files Include="RELEASE_NOTES.md" />
-    </ComponentGroup>
+    <Component Id="DocFiles" Directory="INSTALLFOLDER" Guid="c834e98d-fad7-4657-b97b-7e2578e22f27">
+      <File Source="$(var.SourceDirectory)\README.md" />
+      <File Source="$(var.SourceDirectory)\LICENSE" />
+      <File Source="$(var.SourceDirectory)\CHANGELOG.md" />
+      <File Source="$(var.SourceDirectory)\RELEASE_NOTES.md" />
+      <RegistryValue Root="HKCU" Key="Software\Akatsukisoft\Shiori\Components" Name="DocFiles" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
 
     <!--
       config/logs/data are created empty and never explicitly removed by this
@@ -62,6 +61,7 @@
     -->
     <Component Id="PreserveConfigDirectory" Directory="CONFIGFOLDER" Guid="fe1496ac-c6bd-48d2-aeb0-acc21f9ba80f">
       <CreateFolder />
+      <RegistryValue Root="HKCU" Key="Software\Akatsukisoft\Shiori\Components" Name="ConfigDirectory" Type="integer" Value="1" KeyPath="yes" />
     </Component>
     <Component Id="LanguageConfig" Directory="CONFIGFOLDER" Guid="0a2a3833-0196-4f9c-a2d2-919a75923c96">
       <IniFile Id="WriteLanguageConfig"
@@ -71,16 +71,20 @@
                Key="language"
                Value="[SHIORI_LANGUAGE]"
                Action="addLine" />
+      <RegistryValue Root="HKCU" Key="Software\Akatsukisoft\Shiori\Components" Name="LanguageConfig" Type="integer" Value="1" KeyPath="yes" />
     </Component>
     <Component Id="PreserveLogsDirectory" Directory="LOGSFOLDER" Guid="128795bb-ede7-443f-9f89-8750b9baca8d">
       <CreateFolder />
+      <RegistryValue Root="HKCU" Key="Software\Akatsukisoft\Shiori\Components" Name="LogsDirectory" Type="integer" Value="1" KeyPath="yes" />
     </Component>
     <Component Id="PreserveDataDirectory" Directory="DATAFOLDER" Guid="9fac7196-39ea-4d3e-a164-614ffaff0adc">
       <CreateFolder />
+      <RegistryValue Root="HKCU" Key="Software\Akatsukisoft\Shiori\Components" Name="DataDirectory" Type="integer" Value="1" KeyPath="yes" />
     </Component>
 
     <Component Id="PathEnvironment" Directory="BINFOLDER" Guid="e7a55032-6253-442f-a16a-83baa5635697">
       <Environment Id="AddBinToPath" Name="PATH" Action="set" Part="last" Value="[BINFOLDER]" System="no" Permanent="no" />
+      <RegistryValue Root="HKCU" Key="Software\Akatsukisoft\Shiori\Components" Name="PathEnvironment" Type="integer" Value="1" KeyPath="yes" />
     </Component>
 
     <!--
@@ -107,11 +111,18 @@
     -->
     <Component Id="RegistryKeyPath" Directory="INSTALLFOLDER" Guid="5db55f7a-31fb-47ef-976b-6c7c4add7818">
       <RegistryValue Root="HKCU" Key="Software\Akatsukisoft\Shiori" Name="InstallPath" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+      <RemoveFolder Id="RemoveJaJpFolder" Directory="JAJPFOLDER" On="uninstall" />
+      <RemoveFolder Id="RemoveBinFolder" Directory="BINFOLDER" On="uninstall" />
+      <RemoveFolder Id="RemoveConfigFolderIfEmpty" Directory="CONFIGFOLDER" On="uninstall" />
+      <RemoveFolder Id="RemoveLogsFolderIfEmpty" Directory="LOGSFOLDER" On="uninstall" />
+      <RemoveFolder Id="RemoveDataFolderIfEmpty" Directory="DATAFOLDER" On="uninstall" />
+      <RemoveFolder Id="RemoveInstallFolder" Directory="INSTALLFOLDER" On="uninstall" />
+      <RemoveFolder Id="RemoveProgramsFolderIfEmpty" Directory="ProgramsFolder" On="uninstall" />
     </Component>
 
     <Feature Id="MainFeature" Title="Shiori" Level="1">
       <ComponentGroupRef Id="BinFiles" />
-      <ComponentGroupRef Id="DocFiles" />
+      <ComponentRef Id="DocFiles" />
       <ComponentRef Id="PreserveConfigDirectory" />
       <ComponentRef Id="LanguageConfig" />
       <ComponentRef Id="PreserveLogsDirectory" />
@@ -123,9 +134,31 @@
 
     <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />
 
-    <ui:WixUI Id="WixUI_Minimal" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
 
-    <UI>
+    <UI Id="ShioriUI">
+      <TextStyle Id="WixUI_Font_Normal" FaceName="Tahoma" Size="8" />
+      <TextStyle Id="WixUI_Font_Bigger" FaceName="Tahoma" Size="12" />
+      <TextStyle Id="WixUI_Font_Title" FaceName="Tahoma" Size="9" Bold="yes" />
+      <Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
+
+      <DialogRef Id="BrowseDlg" />
+      <DialogRef Id="DiskCostDlg" />
+      <DialogRef Id="ErrorDlg" />
+      <DialogRef Id="FatalError" />
+      <DialogRef Id="FilesInUse" />
+      <DialogRef Id="MsiRMFilesInUse" />
+      <DialogRef Id="PrepareDlg" />
+      <DialogRef Id="ProgressDlg" />
+      <DialogRef Id="ResumeDlg" />
+      <DialogRef Id="UserExit" />
+      <DialogRef Id="WelcomeDlg" />
+      <DialogRef Id="LicenseAgreementDlg" />
+      <DialogRef Id="InstallDirDlg" />
+      <DialogRef Id="VerifyReadyDlg" />
+      <DialogRef Id="MaintenanceWelcomeDlg" />
+      <DialogRef Id="MaintenanceTypeDlg" />
+
       <Dialog Id="LanguageDlg" Width="370" Height="270" Title="[ProductName] Setup">
         <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15" Transparent="yes" NoPrefix="yes">
           <Text Value="{\WixUI_Font_Title}Language" />
@@ -174,12 +207,34 @@
         </Control>
       </Dialog>
 
-      <Publish Dialog="WelcomeEulaDlg" Control="Next" Event="NewDialog" Value="LanguageDlg" Order="10" Condition="1" />
-      <Publish Dialog="LanguageDlg" Control="Back" Event="NewDialog" Value="WelcomeEulaDlg" Order="10" Condition="1" />
+      <Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999" />
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="LicenseAgreementDlg" Condition="NOT Installed" />
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" Condition="Installed AND PATCH" />
+      <Publish Dialog="LicenseAgreementDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" />
+      <Publish Dialog="LicenseAgreementDlg" Control="Next" Event="NewDialog" Value="LanguageDlg" Condition='LicenseAccepted = "1"' />
+      <Publish Dialog="LanguageDlg" Control="Back" Event="NewDialog" Value="LicenseAgreementDlg" Order="10" Condition="1" />
       <Publish Dialog="LanguageDlg" Control="Next" Event="NewDialog" Value="AutostartDlg" Order="10" Condition="1" />
       <Publish Dialog="AutostartDlg" Control="Back" Event="NewDialog" Value="LanguageDlg" Order="10" Condition="1" />
-      <Publish Dialog="AutostartDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" Order="10" Condition="1" />
-      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="AutostartDlg" Order="10" Condition="1" />
+      <Publish Dialog="AutostartDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg" Order="10" Condition="1" />
+      <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="AutostartDlg" Condition="NOT Installed" />
+      <Publish Dialog="InstallDirDlg" Control="Next" Event="CheckTargetPath" Value="[WIXUI_INSTALLDIR]" Order="1" />
+      <Publish Dialog="InstallDirDlg" Control="Next" Event="SetTargetPath" Value="[WIXUI_INSTALLDIR]" Order="3" />
+      <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" Order="4" />
+      <Publish Dialog="InstallDirDlg" Control="ChangeFolder" Property="_BrowseProperty" Value="[WIXUI_INSTALLDIR]" Order="1" />
+      <Publish Dialog="InstallDirDlg" Control="ChangeFolder" Event="SpawnDialog" Value="BrowseDlg" Order="2" />
+      <Publish Dialog="BrowseDlg" Control="OK" Event="CheckTargetPath" Value="[WIXUI_INSTALLDIR]" Order="1" />
+      <Publish Dialog="BrowseDlg" Control="OK" Event="SetTargetPath" Value="[_BrowseProperty]" Order="3" />
+      <Publish Dialog="BrowseDlg" Control="OK" Event="EndDialog" Value="Return" Order="4" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="InstallDirDlg" Order="1" Condition="NOT Installed" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg" Order="2" Condition="Installed AND NOT PATCH" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="2" Condition="Installed AND PATCH" />
+      <Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Event="NewDialog" Value="MaintenanceTypeDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton" Event="NewDialog" Value="VerifyReadyDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton" Event="NewDialog" Value="VerifyReadyDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="Back" Event="NewDialog" Value="MaintenanceWelcomeDlg" />
+
+      <Property Id="ARPNOMODIFY" Value="1" />
     </UI>
+    <UIRef Id="WixUI_Common" />
   </Package>
 </Wix>

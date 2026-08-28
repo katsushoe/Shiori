@@ -4,6 +4,19 @@ All notable changes to Shiori are documented in this file.
 
 ## [Unreleased]
 
+## [2.3.9] - 2026-08-29
+
+### Added
+
+- Added `elapsedMilliseconds` to `search_files` responses so AI clients can
+  report Shiori's internal indexed-search duration separately from MCP latency.
+
+### Fixed
+
+- Corrected the WiX dialog sequence used by interactive MSI installations.
+- Added compliant per-user component key paths and directory cleanup metadata
+  so MSI validation no longer reports ICE03, ICE38, or ICE64 errors.
+
 ## [2.3.8] - 2026-08-26
 
 ### Added
