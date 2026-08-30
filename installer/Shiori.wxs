@@ -63,7 +63,7 @@
       <CreateFolder />
       <RegistryValue Root="HKCU" Key="Software\Akatsukisoft\Shiori\Components" Name="ConfigDirectory" Type="integer" Value="1" KeyPath="yes" />
     </Component>
-    <Component Id="LanguageConfig" Directory="CONFIGFOLDER" Guid="0a2a3833-0196-4f9c-a2d2-919a75923c96">
+    <Component Id="LanguageConfig" Directory="CONFIGFOLDER" Guid="0a2a3833-0196-4f9c-a2d2-919a75923c96" Permanent="yes" NeverOverwrite="yes">
       <IniFile Id="WriteLanguageConfig"
                Name="shiori.ini"
                Directory="CONFIGFOLDER"

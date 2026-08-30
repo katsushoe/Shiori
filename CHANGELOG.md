@@ -4,6 +4,16 @@ All notable changes to Shiori are documented in this file.
 
 ## [Unreleased]
 
+## [2.3.10] - 2026-08-29
+
+### Changed
+
+- Updated the product version for the validated Windows installer build.
+
+### Fixed
+
+- Preserved the existing language setting during MSI upgrades.
+
 ## [2.3.9] - 2026-08-29
 
 ### Added
