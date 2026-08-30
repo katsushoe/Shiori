@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Shiori.Core.Engine;
 
 namespace Shiori.Cli.Server;
@@ -28,6 +29,7 @@ public sealed class WorkspaceCoordinator
             throw new ArgumentOutOfRangeException(nameof(limit), "Limit must be from 1 to 100.");
         }
 
+        var stopwatch = Stopwatch.StartNew();
         var paths = _engines.ResolveWorkspacePaths(workspaces);
         using var concurrency = CreateConcurrencyGate(paths.Count);
         var searches = paths.Select(path => SearchWorkspaceAsync(
@@ -60,7 +62,13 @@ public sealed class WorkspaceCoordinator
             GetActionRequired(response.Status, response.Error),
             GetSuggestedTool(response.Status, response.Error),
             response.Error?.Message)).ToArray();
-        return new WorkspaceSearchFilesResponse(results, errors, summaries, FormatSummaryTable(summaries));
+        stopwatch.Stop();
+        return new WorkspaceSearchFilesResponse(
+            results,
+            errors,
+            summaries,
+            FormatSummaryTable(summaries),
+            stopwatch.Elapsed.TotalMilliseconds);
     }
 
     private async Task<SearchWorkspaceResponse> SearchWorkspaceAsync(

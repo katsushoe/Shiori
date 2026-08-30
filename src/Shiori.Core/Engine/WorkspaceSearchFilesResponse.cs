@@ -5,4 +5,5 @@ public sealed record WorkspaceSearchFilesResponse(
     IReadOnlyList<WorkspaceSearchResult> Results,
     IReadOnlyList<WorkspaceOperationError> Errors,
     IReadOnlyList<WorkspaceSearchSummary> Workspaces,
-    string SummaryMarkdown);
+    string SummaryMarkdown,
+    double ElapsedMilliseconds);

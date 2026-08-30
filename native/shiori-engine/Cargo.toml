@@ -1,6 +1,6 @@
 [package]
 name = "shiori-engine"
-version = "2.3.8"
+version = "2.3.10"
 edition = "2024"
 license-file = "../../LICENSE"
 
@@ -9,7 +9,7 @@ name = "shiori_engine"
 crate-type = ["cdylib"]
 
 [package.metadata.shiori]
-version = "2.3.8.0"
+version = "2.3.10.0"
 
 [dependencies]
 ignore = "0.4.33"
