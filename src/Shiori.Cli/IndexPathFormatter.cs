@@ -6,13 +6,15 @@ internal static class IndexPathFormatter
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        var fullPath = Path.GetFullPath(path);
-        if (fullPath.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase))
+        if (path.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase))
         {
-            return @"\\" + fullPath[8..];
+            return @"\\" + path[8..];
         }
-        return fullPath.StartsWith(@"\\?\", StringComparison.OrdinalIgnoreCase)
-            ? fullPath[4..]
-            : fullPath;
+        if (path.StartsWith(@"\\?\", StringComparison.OrdinalIgnoreCase))
+        {
+            return path[4..];
+        }
+
+        return Path.GetFullPath(path);
     }
 }
