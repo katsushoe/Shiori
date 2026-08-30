@@ -9,6 +9,8 @@ All notable changes to Shiori are documented in this file.
 ### Changed
 
 - Updated the product version for the validated Windows installer build.
+- Removed the unsupported macOS CI and packaging workflow. Windows remains the
+  only officially supported distribution platform.
 
 ### Fixed
 
