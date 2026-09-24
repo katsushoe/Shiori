@@ -4,6 +4,37 @@ All notable changes to Shiori are documented in this file.
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-09-24
+
+### Added
+
+- Added `shiori config init [--language <en-US|ja-JP>]`, which creates
+  `config\shiori.ini` only when it does not exist.
+
+### Fixed
+
+- MSI upgrades no longer delete `config\shiori.ini`. The installer stopped
+  managing the file through the IniFile table, calls `shiori config init`
+  instead, and removes the previous version after installing the new one.
+
+## [2.4.0] - 2026-09-24
+
+### Changed
+
+- Shiori no longer reads environment variables. See
+  [ADR 0005](docs/adr/0005-no-environment-variables.md).
+- The MCP bearer token is generated automatically and stored in
+  `config\mcp-token.bin`, encrypted with Windows DPAPI for the current user.
+  `SHIORI_MCP_TOKEN` is no longer used.
+- MCP clients connect through the new `shiori mcp` stdio bridge.
+  `shiori config claude` and `shiori config codex` now generate stdio
+  configuration; regenerate existing client entries.
+- The data directory is fixed to `<install-root>\data`; `SHIORI_DATA_HOME` is
+  no longer used.
+- Indexing exclusions moved from `SHIORI_EXCLUDE_PATTERNS` to
+  `index.exclude_patterns` in `config\shiori.ini`.
+- The native engine ABI is now version 6.
+
 ## [2.3.10] - 2026-08-29
 
 ### Changed

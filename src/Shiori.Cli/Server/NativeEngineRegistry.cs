@@ -10,12 +10,17 @@ public sealed class NativeEngineRegistry : IWorkspaceEngineProvider, IDisposable
     private readonly ConcurrentDictionary<string, byte> _allowedWorkspaces;
     private readonly ConcurrentDictionary<string, Lazy<IShioriEngine>> _engines =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly NativeEngineOptions _options;
     private bool _disposed;
 
     /// <summary>Initializes a registry restricted to explicit workspace roots.</summary>
-    public NativeEngineRegistry(IEnumerable<string> allowedWorkspaces)
+    /// <param name="allowedWorkspaces">The workspace roots that may be opened.</param>
+    /// <param name="options">The native engine data location and indexing exclusions.</param>
+    public NativeEngineRegistry(IEnumerable<string> allowedWorkspaces, NativeEngineOptions options)
     {
         ArgumentNullException.ThrowIfNull(allowedWorkspaces);
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
         _allowedWorkspaces = new ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
         foreach (var workspace in allowedWorkspaces)
         {
@@ -53,8 +58,8 @@ public sealed class NativeEngineRegistry : IWorkspaceEngineProvider, IDisposable
 
         var lazyEngine = _engines.GetOrAdd(
             canonicalPath,
-            static path => new Lazy<IShioriEngine>(
-                () => NativeShioriEngine.Open(path),
+            path => new Lazy<IShioriEngine>(
+                () => NativeShioriEngine.Open(path, _options),
                 LazyThreadSafetyMode.ExecutionAndPublication));
         return lazyEngine.Value;
     }

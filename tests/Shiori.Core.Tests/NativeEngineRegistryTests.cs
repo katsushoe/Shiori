@@ -1,4 +1,5 @@
 using Shiori.Cli.Server;
+using Shiori.Native;
 using Xunit;
 
 namespace Shiori.Core.Tests;
@@ -8,7 +9,7 @@ public sealed class NativeEngineRegistryTests
     [Fact]
     public void EmptyRegistry_AllowsListingAndDefaultResolution()
     {
-        using var registry = new NativeEngineRegistry([]);
+        using var registry = new NativeEngineRegistry([], new NativeEngineOptions(Path.GetTempPath(), []));
 
         Assert.Empty(registry.ListWorkspaces());
         Assert.Empty(registry.ResolveWorkspacePaths(null));
@@ -17,7 +18,7 @@ public sealed class NativeEngineRegistryTests
     [Fact]
     public void EmptyRegistry_RejectsRequestedWorkspace()
     {
-        using var registry = new NativeEngineRegistry([]);
+        using var registry = new NativeEngineRegistry([], new NativeEngineOptions(Path.GetTempPath(), []));
 
         Assert.Throws<UnauthorizedAccessException>(() =>
             registry.ResolveWorkspacePaths([Path.GetTempPath()]));
@@ -27,7 +28,7 @@ public sealed class NativeEngineRegistryTests
     public void LiveAccessBoundary_AllowsAndDisallowsWorkspace()
     {
         var workspace = Path.GetFullPath(Path.GetTempPath());
-        using var registry = new NativeEngineRegistry([]);
+        using var registry = new NativeEngineRegistry([], new NativeEngineOptions(Path.GetTempPath(), []));
 
         registry.AllowWorkspace(workspace);
         Assert.Equal([workspace], registry.ResolveWorkspacePaths(null));

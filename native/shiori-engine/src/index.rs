@@ -45,9 +45,9 @@ impl IndexedFile {
     }
 }
 
-pub fn count_directories(root: &Path) -> Result<u64, String> {
+pub fn count_directories(root: &Path, exclude_patterns: &[String]) -> Result<u64, String> {
     let mut count = 0_u64;
-    for entry in walker(root, HashSet::new())?.build() {
+    for entry in walker(root, exclude_patterns, HashSet::new())?.build() {
         let entry = entry.map_err(|source| format!("cannot scan workspace: {source}"))?;
         if entry.file_type().is_some_and(|value| value.is_dir()) {
             count = count.saturating_add(1);
@@ -58,11 +58,12 @@ pub fn count_directories(root: &Path) -> Result<u64, String> {
 
 pub fn scan(
     root: &Path,
+    exclude_patterns: &[String],
     completed_directories: &HashSet<String>,
     mut on_event: impl FnMut(ScanEvent) -> Result<(), String>,
 ) -> Result<(), String> {
     let mut directories = Vec::<(usize, String)>::new();
-    for entry in walker(root, completed_directories.clone())?.build() {
+    for entry in walker(root, exclude_patterns, completed_directories.clone())?.build() {
         let entry = entry.map_err(|source| format!("cannot scan workspace: {source}"))?;
         let depth = entry.depth();
         complete_directories(&mut directories, depth, &mut on_event)?;
@@ -116,7 +117,11 @@ fn complete_directories(
     Ok(())
 }
 
-fn walker(root: &Path, completed_directories: HashSet<String>) -> Result<WalkBuilder, String> {
+fn walker(
+    root: &Path,
+    exclude_patterns: &[String],
+    completed_directories: HashSet<String>,
+) -> Result<WalkBuilder, String> {
     let mut builder = WalkBuilder::new(root);
     let scan_root = root.to_path_buf();
     builder
@@ -133,15 +138,9 @@ fn walker(root: &Path, completed_directories: HashSet<String>) -> Result<WalkBui
                     .is_ok_and(|path| !completed_directories.contains(&path))
         });
 
-    let configured = std::env::var("SHIORI_EXCLUDE_PATTERNS").unwrap_or_default();
-    let patterns = configured
-        .split(';')
-        .map(str::trim)
-        .filter(|pattern| !pattern.is_empty())
-        .collect::<Vec<_>>();
-    if !patterns.is_empty() {
+    if !exclude_patterns.is_empty() {
         let mut overrides = OverrideBuilder::new(root);
-        for pattern in patterns {
+        for pattern in exclude_patterns {
             overrides
                 .add(&format!("!{pattern}"))
                 .map_err(|source| format!("invalid exclusion pattern '{pattern}': {source}"))?;
@@ -205,10 +204,10 @@ mod tests {
         fs::write(root.join("target").join("output.bin"), "ignored")
             .expect("excluded file should be written");
 
-        let count = count_directories(&root).expect("directories should be counted");
+        let count = count_directories(&root, &[]).expect("directories should be counted");
         let mut files = Vec::new();
         let mut directories = Vec::new();
-        scan(&root, &HashSet::new(), |event| {
+        scan(&root, &[], &HashSet::new(), |event| {
             match event {
                 ScanEvent::File(file) => files.push(file.relative_path),
                 ScanEvent::DirectoryComplete(path) => directories.push(path),
@@ -220,6 +219,29 @@ mod tests {
         assert_eq!(count, 2);
         assert_eq!(directories.len(), 2);
         assert_eq!(files, ["src/main.rs"]);
+        fs::remove_dir_all(root).expect("test directory should be removed");
+    }
+
+    #[test]
+    fn scan_skips_configured_exclude_patterns() {
+        let root = temporary_root("patterns");
+        fs::create_dir_all(root.join("generated")).expect("generated directory should be created");
+        fs::write(root.join("keep.rs"), "").expect("kept file should be written");
+        fs::write(root.join("app.min.js"), "").expect("minified file should be written");
+        fs::write(root.join("generated").join("out.rs"), "")
+            .expect("generated file should be written");
+        let patterns = ["generated/**".to_owned(), "*.min.js".to_owned()];
+
+        let mut files = Vec::new();
+        scan(&root, &patterns, &HashSet::new(), |event| {
+            if let ScanEvent::File(file) = event {
+                files.push(file.relative_path);
+            }
+            Ok(())
+        })
+        .expect("workspace should be scanned");
+
+        assert_eq!(files, ["keep.rs"]);
         fs::remove_dir_all(root).expect("test directory should be removed");
     }
 

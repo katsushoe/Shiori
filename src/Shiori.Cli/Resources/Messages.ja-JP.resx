@@ -32,5 +32,7 @@
   shiori doctor
   shiori config claude [--port &lt;1-65535&gt;] [--name &lt;サーバー名&gt;]
   shiori config codex [--port &lt;1-65535&gt;] [--name &lt;サーバー名&gt;]
-  shiori serve [--port &lt;1-65535&gt;]</value></data>
+  shiori config init [--language &lt;en-US|ja-JP&gt;]
+  shiori serve [--port &lt;1-65535&gt;]
+  shiori mcp [--port &lt;1-65535&gt;]</value></data>
 </root>

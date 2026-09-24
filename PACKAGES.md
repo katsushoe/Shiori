@@ -1,9 +1,10 @@
 # PACKAGES.md Version
-2026.08.17
+2026.09.24
 
 # Change History
 
 - 2026.08.17
+- 2026.09.24
 
 # Shiori Package Inventory
 
@@ -34,6 +35,7 @@ truth; credentials and authenticated feed URLs must not be committed.
 | `Shiori.Cli` | `Microsoft.Data.Sqlite` | `10.0.10` | NuGet | Unified database management and migration | Align with supported .NET servicing |
 | `Shiori.Cli` | `ModelContextProtocol.AspNetCore` | `2.0.0` | NuGet | Streamable HTTP MCP server | Review MCP compatibility before updating |
 | `Shiori.Cli` | `SQLitePCLRaw.bundle_e_sqlite3` | `2.1.13` | NuGet | Patched native SQLite bundle | Pin above vulnerable 2.1.11 |
+| `Shiori.Cli` | `System.Security.Cryptography.ProtectedData` | `10.0.12` | NuGet | DPAPI protection of the MCP token file | Align with supported .NET servicing |
 | `Shiori.Core.Tests` | `Microsoft.NET.Test.Sdk` | `18.0.1` | NuGet | .NET test host | Update with the supported SDK |
 | `Shiori.Core.Tests` | `xunit` | `2.9.3` | NuGet | Test framework | Update with runner compatibility |
 | `Shiori.Core.Tests` | `xunit.runner.visualstudio` | `3.1.4` | NuGet | Test discovery | Keep private and align with `xunit` |

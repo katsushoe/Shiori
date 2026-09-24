@@ -136,14 +136,14 @@ internal sealed class ShioriTools
         DoctorRunner.GetReportAsync(cancellationToken);
 
     [McpServerTool(Name = "config_claude", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-    [Description("Generates Claude Code MCP configuration without embedding the bearer token.")]
+    [Description("Generates Claude Code MCP configuration that starts the Shiori stdio bridge without embedding the bearer token.")]
     public static string GenerateClaudeConfig(
         [Description("MCP server port from 1 to 65535.")] int port = 39473,
         [Description("MCP server name.")] string name = "shiori") =>
         ClaudeCodeConfigGenerator.Generate(port, name);
 
     [McpServerTool(Name = "config_codex", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-    [Description("Generates Codex MCP configuration without embedding the bearer token.")]
+    [Description("Generates Codex MCP configuration that starts the Shiori stdio bridge without embedding the bearer token.")]
     public static string GenerateCodexConfig(
         [Description("MCP server port from 1 to 65535.")] int port = 39473,
         [Description("MCP server name.")] string name = "shiori") =>

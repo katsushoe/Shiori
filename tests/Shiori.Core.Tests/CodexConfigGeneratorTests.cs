@@ -6,17 +6,15 @@ namespace Shiori.Core.Tests;
 public sealed class CodexConfigGeneratorTests
 {
     [Fact]
-    public void Generate_returns_streamable_http_configuration()
+    public void Generate_returns_stdio_bridge_configuration()
     {
         var toml = CodexConfigGenerator.Generate(41234, "shiori-local");
 
         Assert.Contains("[mcp_servers.shiori-local]", toml, StringComparison.Ordinal);
-        Assert.Contains("url = \"http://127.0.0.1:41234/mcp\"", toml, StringComparison.Ordinal);
-        Assert.Contains(
-            "bearer_token_env_var = \"SHIORI_MCP_TOKEN\"",
-            toml,
-            StringComparison.Ordinal);
-        Assert.DoesNotContain("SHIORI_ALLOWED_WORKSPACES", toml, StringComparison.Ordinal);
+        Assert.Contains("command = \"shiori\"", toml, StringComparison.Ordinal);
+        Assert.Contains("args = [\"mcp\", \"--port\", \"41234\"]", toml, StringComparison.Ordinal);
+        Assert.DoesNotContain("bearer_token", toml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SHIORI_", toml, StringComparison.Ordinal);
     }
 
     [Theory]

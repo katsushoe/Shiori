@@ -27,9 +27,13 @@ public sealed class NativeShioriEngine : IShioriEngine
     public uint AbiVersion { get; }
 
     /// <summary>Opens the native engine for an explicitly allowed workspace.</summary>
-    public static unsafe NativeShioriEngine Open(string workspace)
+    /// <param name="workspace">The workspace root to open.</param>
+    /// <param name="options">The data location and indexing exclusions.</param>
+    public static unsafe NativeShioriEngine Open(string workspace, NativeEngineOptions options)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspace);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentException.ThrowIfNullOrWhiteSpace(options.DataRoot);
         var abiVersion = NativeAbi.GetAbiVersion();
         if (abiVersion != NativeAbi.SupportedAbiVersion)
         {
@@ -38,9 +42,21 @@ public sealed class NativeShioriEngine : IShioriEngine
         }
 
         var bytes = Encoding.UTF8.GetBytes(workspace);
+        var dataRootBytes = Encoding.UTF8.GetBytes(options.DataRoot);
+        var excludeBytes = Encoding.UTF8.GetBytes(string.Join(';', options.ExcludePatterns));
         fixed (byte* pointer = bytes)
+        fixed (byte* dataRootPointer = dataRootBytes)
+        fixed (byte* excludePointer = excludeBytes)
         {
-            var status = NativeAbi.Open(pointer, (nuint)bytes.Length, out var nativeHandle, out var error);
+            var status = NativeAbi.Open(
+                pointer,
+                (nuint)bytes.Length,
+                dataRootPointer,
+                (nuint)dataRootBytes.Length,
+                excludePointer,
+                (nuint)excludeBytes.Length,
+                out var nativeHandle,
+                out var error);
             if (status != 0)
             {
                 throw CreateException(error, "Native engine failed to open the workspace.");

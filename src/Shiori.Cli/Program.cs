@@ -6,7 +6,6 @@ using Shiori.Core.Integration;
 using Shiori.Native;
 
 ApplicationCulture.Apply();
-InstallationLayout.ApplyDataDirectory();
 return await RunAsync(args).ConfigureAwait(false);
 
 static async Task<int> RunAsync(string[] arguments)
@@ -28,6 +27,7 @@ static async Task<int> RunAsync(string[] arguments)
             "workspace" => await RunWorkspaceAsync(arguments[1..]).ConfigureAwait(false),
             "doctor" => await DoctorRunner.RunAsync().ConfigureAwait(false),
             "serve" => await RunServerAsync(arguments[1..]).ConfigureAwait(false),
+            "mcp" => await RunBridgeAsync(arguments[1..]).ConfigureAwait(false),
             _ => Fail(CliText.Format("UnknownCommand", arguments[0])),
         };
     }
@@ -49,6 +49,13 @@ static int RunConfig(string[] arguments)
     {
         return Fail(CliText.Get("ConfigTargetRequired"));
     }
+    if (arguments[0] == "init")
+    {
+        var language = GetOption(arguments, "--language") ?? ApplicationSettings.DefaultLanguage;
+        WriteJson(new { Created = ApplicationSettings.Initialize(language) });
+        return 0;
+    }
+
     var port = int.TryParse(GetOption(arguments, "--port"), out var parsed) ? parsed : 39473;
     var name = GetOption(arguments, "--name") ?? "shiori";
     var configuration = arguments[0] switch
@@ -97,7 +104,7 @@ static async Task<int> RunIndexAsync(string[] arguments)
     var requestedWorkspace = IndexCommandArguments.GetWorkspace(arguments)
         ?? throw new ArgumentException(CliText.Get("IndexWorkspaceRequired"));
     var workspace = await RequireRegisteredWorkspaceAsync(requestedWorkspace).ConfigureAwait(false);
-    using var engine = NativeShioriEngine.Open(workspace);
+    using var engine = NativeShioriEngine.Open(workspace, ApplicationSettings.LoadEngineOptions());
     if (arguments[0] == "status")
     {
         WriteJson(engine.GetIndexStatus());
@@ -145,7 +152,9 @@ static async Task<int> RunFindAsync(string[] arguments)
     }
     var limit = int.TryParse(GetOption(arguments, "--limit"), out var parsed) ? parsed : 20;
     var registered = await new WorkspaceRegistry().ListAsync().ConfigureAwait(false);
-    using var engines = new NativeEngineRegistry(registered.Select(workspace => workspace.Path));
+    using var engines = new NativeEngineRegistry(
+        registered.Select(workspace => workspace.Path),
+        ApplicationSettings.LoadEngineOptions());
     var coordinator = new WorkspaceCoordinator(engines);
     var requested = GetOptions(arguments, "--allow");
     var response = await coordinator
@@ -159,6 +168,12 @@ static Task<int> RunServerAsync(string[] arguments)
 {
     var port = int.TryParse(GetOption(arguments, "--port"), out var parsed) ? parsed : 39473;
     return ShioriHttpServer.RunAsync(port);
+}
+
+static Task<int> RunBridgeAsync(string[] arguments)
+{
+    var port = int.TryParse(GetOption(arguments, "--port"), out var parsed) ? parsed : 39473;
+    return McpStdioBridge.RunAsync(port);
 }
 
 static async Task<string> RequireRegisteredWorkspaceAsync(string path)

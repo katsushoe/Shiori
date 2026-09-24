@@ -8,12 +8,12 @@ Shioriは、AIエージェント向けの高速なローカルファースト・
 エンドポイントを公開し、単一SQLiteデータベース内でワークスペースIDごとに
 インデックスを分離します。
 
-製品バージョン: `2.3.10`
+製品バージョン: `2.4.1`
 
 ## はじめに
 
 1. 以下のいずれかの方法でShioriをインストールします。
-2. MCPベアラートークンと許可ワークスペースを設定します。
+2. 許可ワークスペースを登録します。
 3. 各ワークスペースの初期インデックスを作成します。
 4. サーバーを起動し、AIエージェントへ接続します。
 
@@ -22,7 +22,7 @@ Shioriは、AIエージェント向けの高速なローカルファースト・
 ### Windowsインストーラ
 
 [最新リリース](https://github.com/katsushoe/Shiori/releases/latest)から
-`shiori-v2.3.10-win-x64-setup.msi`をダウンロードして実行します。
+`shiori-v2.4.1-win-x64-setup.msi`をダウンロードして実行します。
 **Add Shiori to the current user's PATH**を選択したまま進めてください。
 インストーラは自己完結型で、現在のユーザーにのみインストールされます。
 指定したインストールルートの下に`bin`、`config`、`logs`、`data`を作成し、
@@ -37,14 +37,14 @@ shiori doctor
 
 ### ZIPバイナリ
 
-最新リリースから`shiori-v2.3.10-win-x64.zip`と隣接するSHA-256ファイルを
+最新リリースから`shiori-v2.4.1-win-x64.zip`と隣接するSHA-256ファイルを
 ダウンロードします。チェックサムを確認して任意の恒久的なインストールルートへ
 展開し、その`bin`ディレクトリをユーザーの`PATH`へ追加してください。ZIPにも
 インストーラと同じ標準構成が含まれ、.NETを別途インストールする必要はありません。
 
 ```powershell
-$expected = (Get-Content .\shiori-v2.3.10-win-x64.zip.sha256).Split()[0]
-$actual = (Get-FileHash .\shiori-v2.3.10-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+$expected = (Get-Content .\shiori-v2.4.1-win-x64.zip.sha256).Split()[0]
+$actual = (Get-FileHash .\shiori-v2.4.1-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($actual -ne $expected) { throw "Checksum mismatch" }
 ```
 
@@ -62,7 +62,7 @@ cargo build --release --manifest-path .\native\shiori-engine\Cargo.toml
 dotnet restore .\Shiori.slnx
 dotnet build .\Shiori.slnx --configuration Release --no-restore
 dotnet test .\tests\Shiori.Core.Tests\Shiori.Core.Tests.csproj --configuration Release --no-build
-.\scripts\Publish-Windows.ps1 -Version 2.3.10
+.\scripts\Publish-Windows.ps1 -Version 2.4.1
 ```
 
 配布スクリプトはインストーラ、ZIP、チェックサムを`artifacts/`へ出力します。
@@ -70,18 +70,17 @@ WiX Toolset CLIを導入していない場合は`-SkipInstaller`を指定して�
 
 ## 設定
 
-32文字以上のランダムなトークンを作成し、MCPサーバーからのアクセスを許可する
-全ディレクトリを登録します。
+MCPサーバーからのアクセスを許可する全ディレクトリを登録します。
 
 ```powershell
-$env:SHIORI_MCP_TOKEN = ([guid]::NewGuid().ToString('N'))
 shiori workspace add F:\Projects\ProjectA
 shiori workspace add F:\Projects\ProjectB
 shiori doctor
 ```
 
-ターミナルを閉じた後もサーバーを利用する場合は、安全なユーザー環境設定へ
-トークンを永続化してください。登録済みワークスペースがMCPアクセス境界です。
+トークンの設定は不要です。ShioriはMCPベアラートークンを初回利用時に生成し、
+現在のユーザー用のWindows DPAPIで暗号化して保存します。登録済みワークスペースが
+MCPアクセス境界です。
 全設定は[CONFIG.md（英語）](CONFIG.md)を参照してください。
 
 ## 使用方法
@@ -118,14 +117,16 @@ shiori serve --port 39473
 
 MCPエンドポイントは`http://127.0.0.1:39473/mcp`です。
 `shiori config claude`または`shiori config codex`でクライアント設定を生成します。
-どちらもトークン値を埋め込まず、環境変数名を参照します。
+どちらもstdioブリッジ`shiori mcp`を起動し、ブリッジが保護されたトークンを
+読み込んでサーバーへ中継するため、トークンは設定に埋め込まれません。
 登録ワークスペースが0件でもサーバーは起動でき、一覧とヘルスチェックを利用
 できます。ワークスペースを登録するまでは検索結果が0件になります。
 認証済みMCPクライアントからもワークスペースの追加・削除、インデックス作成、
 診断、クライアント設定生成を実行できます。WindowsでMCPからワークスペースを
 追加すると、MCPサーバーがWindows Terminalを直接起動して索引作成の進捗を表示します。
 ワークスペース追加はローカル
-ファイルシステムのアクセス境界を拡張するため、Bearer Tokenを厳重に管理してください。
+ファイルシステムのアクセス境界を拡張するため、信頼できない利用者がアクセスできない
+WindowsアカウントでShioriを実行してください。
 
 ## ドキュメント
 
@@ -141,8 +142,8 @@ MCPエンドポイントは`http://127.0.0.1:39473/mcp`です。
 ## セキュリティ
 
 Shioriはループバックだけで待ち受け、MCPではベアラー認証を必須とし、明示的に
-許可されたワークスペースルート外へのアクセスを拒否します。ベアラートークンや
-実環境の設定値をコミットしないでください。
+許可されたワークスペースルート外へのアクセスを拒否します。ベアラートークンは
+暗号化して保存され、クライアント設定には現れません。
 
 ## ライセンス
 

@@ -5,7 +5,7 @@ namespace Shiori.Core.Integration;
 /// <summary>Generates a Codex MCP server configuration.</summary>
 public static partial class CodexConfigGenerator
 {
-    /// <summary>Generates TOML content without embedding the bearer-token value.</summary>
+    /// <summary>Generates TOML content that starts the Shiori stdio bridge; no token is embedded.</summary>
     public static string Generate(int port = 39473, string serverName = "shiori")
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(port, 1);
@@ -20,8 +20,8 @@ public static partial class CodexConfigGenerator
 
         return $"""
             [mcp_servers.{serverName}]
-            url = "http://127.0.0.1:{port}/mcp"
-            bearer_token_env_var = "SHIORI_MCP_TOKEN"
+            command = "shiori"
+            args = ["mcp", "--port", "{port}"]
             """;
     }
 

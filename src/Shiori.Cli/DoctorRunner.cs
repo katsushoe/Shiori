@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using Shiori.Native;
 
@@ -6,7 +7,6 @@ namespace Shiori.Cli;
 /// <summary>Runs local Shiori dependency, storage, and configuration diagnostics.</summary>
 internal static class DoctorRunner
 {
-    private const string TokenVariable = "SHIORI_MCP_TOKEN";
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -86,11 +86,7 @@ internal static class DoctorRunner
         List<DoctorCheck> checks,
         CancellationToken cancellationToken)
     {
-        var token = Environment.GetEnvironmentVariable(TokenVariable);
-        checks.Add(new DoctorCheck(
-            "mcp_token",
-            string.IsNullOrWhiteSpace(token) ? "warning" : token.Length >= 32 ? "ok" : "error",
-            string.IsNullOrWhiteSpace(token) ? "not configured" : token.Length >= 32 ? "configured" : "must contain at least 32 characters"));
+        AddTokenCheck(checks);
 
         try
         {
@@ -106,6 +102,21 @@ internal static class DoctorRunner
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException or Microsoft.Data.Sqlite.SqliteException)
         {
             checks.Add(new DoctorCheck("registered_workspaces", "error", exception.Message));
+        }
+    }
+
+    private static void AddTokenCheck(List<DoctorCheck> checks)
+    {
+        try
+        {
+            var token = new McpTokenStore().TryRead();
+            checks.Add(token is null
+                ? new DoctorCheck("mcp_token", "warning", "not created; shiori serve creates it")
+                : new DoctorCheck("mcp_token", "ok", "configured"));
+        }
+        catch (Exception exception) when (exception is CryptographicException or IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+        {
+            checks.Add(new DoctorCheck("mcp_token", "error", exception.Message));
         }
     }
 

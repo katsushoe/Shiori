@@ -7,12 +7,12 @@ indexes file names, paths, and metadata without opening file contents.
 The server exposes a single Streamable HTTP MCP endpoint and keeps every
 workspace index isolated by workspace ID in one SQLite database.
 
-Product version: `2.3.10`.
+Product version: `2.4.1`.
 
 ## Getting Started
 
 1. Install Shiori using one of the methods below.
-2. Configure the MCP bearer token and allowed workspaces.
+2. Register the allowed workspaces.
 3. Build the initial index for each workspace.
 4. Start the server and connect your AI agent.
 
@@ -20,7 +20,7 @@ Product version: `2.3.10`.
 
 ### Windows installer
 
-Download `shiori-v2.3.10-win-x64-setup.msi` from the
+Download `shiori-v2.4.1-win-x64-setup.msi` from the
 [latest release](https://github.com/katsushoe/Shiori/releases/latest), run it,
 and keep **Add Shiori to the current user's PATH** selected. The installer is
 self-contained, installs only for the current user, and uses `bin`, `config`,
@@ -36,14 +36,14 @@ shiori doctor
 
 ### ZIP binary
 
-Download `shiori-v2.3.10-win-x64.zip` from the latest release, verify the adjacent
+Download `shiori-v2.4.1-win-x64.zip` from the latest release, verify the adjacent
 SHA-256 file, extract it to a permanent installation root, and add its `bin`
 directory to your user `PATH`. The ZIP contains the same standard directory
 layout as the installer and does not require a separate .NET installation.
 
 ```powershell
-$expected = (Get-Content .\shiori-v2.3.10-win-x64.zip.sha256).Split()[0]
-$actual = (Get-FileHash .\shiori-v2.3.10-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+$expected = (Get-Content .\shiori-v2.4.1-win-x64.zip.sha256).Split()[0]
+$actual = (Get-FileHash .\shiori-v2.4.1-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($actual -ne $expected) { throw "Checksum mismatch" }
 ```
 
@@ -60,7 +60,7 @@ cargo build --release --manifest-path .\native\shiori-engine\Cargo.toml
 dotnet restore .\Shiori.slnx
 dotnet build .\Shiori.slnx --configuration Release --no-restore
 dotnet test .\tests\Shiori.Core.Tests\Shiori.Core.Tests.csproj --configuration Release --no-build
-.\scripts\Publish-Windows.ps1 -Version 2.3.10
+.\scripts\Publish-Windows.ps1 -Version 2.4.1
 ```
 
 The publish script writes the installer, ZIP, and checksum files to
@@ -68,19 +68,18 @@ The publish script writes the installer, ZIP, and checksum files to
 
 ## Configuration
 
-Create a random token of at least 32 characters and register every directory
-that the MCP server may access.
+Register every directory that the MCP server may access.
 
 ```powershell
-$env:SHIORI_MCP_TOKEN = ([guid]::NewGuid().ToString('N'))
 shiori workspace add F:\Projects\ProjectA
 shiori workspace add F:\Projects\ProjectB
 shiori doctor
 ```
 
-Persist the token using a secure user-level environment configuration if the
-server must survive terminal restarts. Registered workspaces are the MCP access
-boundary. See [CONFIG.md](CONFIG.md) for every setting.
+No token setup is required: Shiori generates the MCP bearer token on first use
+and stores it encrypted with Windows DPAPI for the current user. Registered
+workspaces are the MCP access boundary. See [CONFIG.md](CONFIG.md) for every
+setting.
 
 ## Usage
 
@@ -115,8 +114,9 @@ shiori serve --port 39473
 ```
 
 The MCP endpoint is `http://127.0.0.1:39473/mcp`. Generate client configuration
-with `shiori config claude` or `shiori config codex`; both reference the token by
-environment-variable name and never embed its value. The server can start with
+with `shiori config claude` or `shiori config codex`; both start the `shiori mcp`
+stdio bridge, which reads the protected token and relays requests to the
+server, so no token is embedded. The server can start with
 no registered workspaces; workspace listing and health checks remain available,
 while searches return no results until a workspace is registered.
 
@@ -124,8 +124,9 @@ Authenticated MCP clients can also add or remove workspaces, build indexes,
 run diagnostics, and generate client configuration. On Windows, adding a workspace
 through MCP makes the MCP server directly open Windows Terminal to display indexing
 progress and a completion message with the indexed file count after the index is
-successfully published. Protect the bearer token: adding a workspace expands the server's local
-filesystem access boundary.
+successfully published. Adding a workspace expands the server's local filesystem
+access boundary, so run Shiori under a Windows account that untrusted users
+cannot access.
 
 ## Documentation
 
@@ -141,8 +142,8 @@ filesystem access boundary.
 ## Security
 
 Shiori listens only on loopback, requires bearer authentication for MCP, and
-rejects access outside explicitly allowed workspace roots. Do not commit bearer
-tokens or real environment settings.
+rejects access outside explicitly allowed workspace roots. The bearer token is
+stored encrypted and never appears in client configuration.
 
 ## License
 
