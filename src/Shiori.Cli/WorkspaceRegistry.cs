@@ -53,7 +53,7 @@ internal sealed class WorkspaceRegistry
         {
         }
 
-        using var engine = NativeShioriEngine.Open(path);
+        using var engine = NativeShioriEngine.Open(path, new NativeEngineOptions(_dataRoot, []));
         return engine.GetWorkspaceInfo();
     }
 

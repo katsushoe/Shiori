@@ -3,14 +3,13 @@
 [English](MCP_SETUP.md) | [日本語](MCP_SETUP.ja.md)
 
 This guide connects a locally running Shiori server to an AI coding agent. For
-all environment variables, see [CONFIG.md](CONFIG.md); for CLI details, see
+all settings, see [CONFIG.md](CONFIG.md); for CLI details, see
 [COMMANDS.md](COMMANDS.md).
 
 ## Values and Placeholders
 
 | Value | How to obtain it | Example | Change when |
 | :--- | :--- | :--- | :--- |
-| MCP token | Generate a random value of at least 32 characters | Generated GUID | Creating or rotating credentials |
 | Workspace path | Copy an existing absolute directory path | `F:\Projects\One` | Authorizing a different workspace |
 | Port | Choose an unused loopback TCP port | `39473` | The default port is unavailable |
 | Server name | Choose a client-visible identifier | `shiori` | Registering multiple Shiori servers |
@@ -25,20 +24,21 @@ them with real values; do not enter the angle brackets.
 - Choose one or more existing absolute workspace directories.
 - Open a new terminal if the installer added Shiori to `PATH`.
 
-## Authentication and Environment
+## Authentication
 
-Create a bearer token of at least 32 characters and register the workspace
-roots that MCP may access.
+Register the workspace roots that MCP may access:
 
 ```powershell
-$env:SHIORI_MCP_TOKEN = ([guid]::NewGuid().ToString('N'))
 shiori workspace add F:\Projects\One
 shiori workspace add F:\Projects\Two
 shiori doctor
 ```
 
-The client and server processes must receive the same token. Do not write the
-token into a committed configuration file. The central `Workspaces` table
+No token setup is required. The first `shiori serve` or `shiori mcp` run creates
+a random bearer token in `config\mcp-token.bin`, encrypted with Windows DPAPI
+for the current user. Clients never see the token: they start the `shiori mcp`
+stdio bridge, which reads it and relays requests to the server. Run the server
+and the clients as the same Windows user. The central `Workspaces` table
 defines the server boundary.
 
 ## Start the Server
@@ -60,6 +60,7 @@ to searching, index maintenance, and workspace administration.
 
 Client registration controls where a client can discover Shiori. Filesystem
 access remains restricted to workspaces registered with `shiori workspace add`.
+Both clients start `shiori mcp`, which requires `shiori` on `PATH`.
 
 ### Claude Code (recommended)
 
@@ -70,20 +71,17 @@ Claude Code project root:
 {
   "mcpServers": {
     "shiori": {
-      "type": "http",
-      "url": "http://127.0.0.1:39473/mcp",
-      "headers": {
-        "Authorization": "Bearer ${SHIORI_MCP_TOKEN}"
-      }
+      "type": "stdio",
+      "command": "shiori",
+      "args": ["mcp", "--port", "39473"]
     }
   }
 }
 ```
 
-`shiori` is the client-visible server name, `type` selects HTTP transport,
-`url` must use the port passed to `shiori serve`, and the authorization header
-reads the token from the client process environment. Do not replace the
-environment reference with the secret value.
+`shiori` is the client-visible server name, `type` selects stdio transport, and
+`--port` must match the port passed to `shiori serve`. The file contains no
+secret and can be committed.
 
 Restart or reload Claude Code after changing the file, then inspect `/mcp`.
 
@@ -98,8 +96,7 @@ shiori config claude > .mcp.json
 
 Use redirection only when creating a new file because it overwrites the file. If
 `.mcp.json` already exists, merge the generated `mcpServers.shiori` entry instead.
-Start Claude Code from an environment containing `SHIORI_MCP_TOKEN`, restart or
-reload it after changing the file, and inspect `/mcp`.
+Restart or reload Claude Code after changing the file, and inspect `/mcp`.
 
 ### Codex (recommended)
 
@@ -107,14 +104,13 @@ Add this complete server section to `%USERPROFILE%\.codex\config.toml`:
 
 ```toml
 [mcp_servers.shiori]
-url = "http://127.0.0.1:39473/mcp"
-bearer_token_env_var = "SHIORI_MCP_TOKEN"
+command = "shiori"
+args = ["mcp", "--port", "39473"]
 ```
 
-`shiori` is the client-visible server name. An `url` selects HTTP transport and
-must use the port passed to `shiori serve`; no local start command is needed
-because Shiori runs separately. `bearer_token_env_var` tells Codex to read the
-bearer token from its process environment without storing the secret in TOML.
+`shiori` is the client-visible server name. `command` and `args` start the
+stdio bridge; `--port` must match the port passed to `shiori serve`. The TOML
+contains no secret.
 
 Restart Codex or start a new task after changing the file.
 
@@ -126,8 +122,8 @@ Run this command to print the same user-scoped TOML section:
 shiori config codex
 ```
 
-Merge the output without replacing other Codex settings, ensure Codex receives
-`SHIORI_MCP_TOKEN`, then restart Codex or start a new task.
+Merge the output without replacing other Codex settings, then restart Codex or
+start a new task.
 
 ## Multiple Workspaces
 
@@ -164,8 +160,10 @@ relative paths from different roots.
 
 ### Unauthorized response
 
-Confirm that the server and client inherited the same `SHIORI_MCP_TOKEN`. The
-token must contain at least 32 characters. Restart both processes after changes.
+Confirm that the server and the MCP client run as the same Windows user, so the
+bridge can decrypt the token the server uses. If the token was rotated while the
+server was running, restart the server and the clients. `shiori doctor` reports
+`mcp_token` as `error` when the current user cannot decrypt the token file.
 
 ### Workspace rejected or missing
 
@@ -174,8 +172,9 @@ restart the server. Use `shiori workspace list` to inspect the authorization set
 
 ### Connection refused
 
-Confirm that `shiori serve` is still running, the configured ports match, and
-the client URL is `http://127.0.0.1:<port>/mcp`.
+Confirm that `shiori serve` is still running and that the `--port` value in the
+client configuration matches the server port. The bridge returns a JSON-RPC
+error when it cannot reach the server.
 
 ### Search returns stale results
 

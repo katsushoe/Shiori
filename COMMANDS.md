@@ -52,8 +52,18 @@ shiori workspace remove <name-or-id-or-absolute-directory>
 shiori doctor
 shiori config claude [--port <1-65535>] [--name <server-name>]
 shiori config codex [--port <1-65535>] [--name <server-name>]
+shiori config init [--language <en-US|ja-JP>]
 shiori serve [--port <1-65535>]
+shiori mcp [--port <1-65535>]
 ```
+
+`serve` starts the loopback MCP server and creates the protected MCP token on
+first run. `mcp` is the stdio bridge that MCP clients start: it reads the
+protected token and relays newline-delimited JSON-RPC between stdin/stdout and
+`http://127.0.0.1:<port>/mcp`. `config claude` and `config codex` print client
+configuration that starts `shiori mcp`. `config init` creates `config\shiori.ini`
+with the given language only when the file does not exist; the installer runs
+it so upgrades keep existing settings.
 
 `workspace add` registers the workspace and automatically rebuilds its index
 while showing progress in the console. Registered workspaces are the MCP access
@@ -85,6 +95,6 @@ If a name matches multiple migrated workspaces, use the workspace ID or absolute
 
 The four lookup tools and the three diagnostics/configuration tools are
 read-only. Workspace and index management tools modify local SQLite state and
-require the same bearer token as every MCP request. Keep that token restricted:
-`workspace_add` can expand the server's filesystem access boundary. `serve`
-remains CLI-only because it starts the MCP host itself.
+require the same bearer token as every MCP request. `workspace_add` can expand
+the server's filesystem access boundary. `serve` and `mcp` remain CLI-only
+because they start the MCP host and its transport bridge.

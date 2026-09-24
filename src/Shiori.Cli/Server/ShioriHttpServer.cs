@@ -8,17 +8,12 @@ namespace Shiori.Cli.Server;
 
 internal static class ShioriHttpServer
 {
-    private const string TokenVariable = "SHIORI_MCP_TOKEN";
     internal static async Task<int> RunAsync(int port)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(port, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(port, 65535);
 
-        var token = Environment.GetEnvironmentVariable(TokenVariable);
-        if (string.IsNullOrWhiteSpace(token) || token.Length < 32)
-        {
-            throw new InvalidOperationException($"{TokenVariable} must contain at least 32 characters.");
-        }
+        var token = new McpTokenStore().GetOrCreate();
 
         var registeredWorkspaces = await new WorkspaceRegistry().ListAsync().ConfigureAwait(false);
         var allowedWorkspaces = ValidateRegisteredWorkspaces(registeredWorkspaces);
@@ -32,7 +27,9 @@ internal static class ShioriHttpServer
         builder.WebHost.ConfigureKestrel(server => server.Listen(IPAddress.Loopback, port));
         builder.Configuration["AllowedHosts"] = "localhost;127.0.0.1;[::1]";
         builder.Logging.AddProvider(new FileLoggerProvider(InstallationLayout.GetDirectory("logs")));
-        builder.Services.AddSingleton(_ => new NativeEngineRegistry(allowedWorkspaces));
+        builder.Services.AddSingleton(_ => new NativeEngineRegistry(
+            allowedWorkspaces,
+            ApplicationSettings.LoadEngineOptions()));
         builder.Services.AddSingleton<IWorkspaceEngineProvider>(serviceProvider =>
             serviceProvider.GetRequiredService<NativeEngineRegistry>());
         builder.Services.AddSingleton<WorkspaceCoordinator>();

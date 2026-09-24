@@ -66,7 +66,8 @@ central tables, and deleted only after a successful copy.
 
 ## Operational conditions
 
-- `SHIORI_DATA_HOME` selects the directory containing the unified `shiori.db`.
+- The unified `shiori.db` is stored in `<install-root>\data`. ADR 0005 removed
+  the former `SHIORI_DATA_HOME` override.
 - A removed workspace must be added and indexed again before MCP can search it.
 - Legacy registries are retained with a `.migrated` suffix for recovery. Legacy
   per-workspace index directories are removed after successful migration.

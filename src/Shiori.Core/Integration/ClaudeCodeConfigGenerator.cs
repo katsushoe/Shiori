@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -6,7 +7,7 @@ namespace Shiori.Core.Integration;
 /// <summary>Generates a project-scoped Claude Code MCP configuration.</summary>
 public static partial class ClaudeCodeConfigGenerator
 {
-    /// <summary>Generates `.mcp.json` content without embedding the bearer-token value.</summary>
+    /// <summary>Generates `.mcp.json` content that starts the Shiori stdio bridge; no token is embedded.</summary>
     public static string Generate(int port = 39473, string serverName = "shiori")
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(port, 1);
@@ -25,12 +26,9 @@ public static partial class ClaudeCodeConfigGenerator
             {
                 [serverName] = new
                 {
-                    type = "http",
-                    url = $"http://127.0.0.1:{port}/mcp",
-                    headers = new Dictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["Authorization"] = "Bearer ${SHIORI_MCP_TOKEN}",
-                    },
+                    type = "stdio",
+                    command = "shiori",
+                    args = new[] { "mcp", "--port", port.ToString(CultureInfo.InvariantCulture) },
                 },
             },
         };

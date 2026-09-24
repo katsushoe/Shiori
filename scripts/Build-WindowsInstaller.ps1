@@ -20,12 +20,17 @@ function Get-StableFileIdentity {
     param([Parameter(Mandatory = $true)][string]$RelativePath)
 
     $normalizedPath = $RelativePath.Replace("\", "/").ToLowerInvariant()
-    $hash = [System.Security.Cryptography.SHA256]::HashData(
-        [System.Text.Encoding]::UTF8.GetBytes($normalizedPath))
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hash = $sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($normalizedPath))
+    }
+    finally {
+        $sha256.Dispose()
+    }
     $guidBytes = [byte[]]$hash[0..15]
     $guidBytes[7] = ($guidBytes[7] -band 0x0f) -bor 0x50
     $guidBytes[8] = ($guidBytes[8] -band 0x3f) -bor 0x80
-    $identifier = [Convert]::ToHexString($hash[0..11])
+    $identifier = [BitConverter]::ToString($hash, 0, 12).Replace("-", "")
     return [pscustomobject]@{
         Id = $identifier
         Guid = ([Guid]::new($guidBytes)).ToString()
@@ -44,7 +49,7 @@ function Write-GeneratedFileSource {
     [void]$builder.AppendLine('  <Fragment>')
     [void]$builder.AppendLine('    <ComponentGroup Id="BinFiles">')
     foreach ($file in Get-ChildItem -LiteralPath $BinaryDirectory -File -Recurse | Sort-Object FullName) {
-        $relativePath = [IO.Path]::GetRelativePath($BinaryDirectory, $file.FullName)
+        $relativePath = $file.FullName.Substring($BinaryDirectory.TrimEnd("\").Length + 1)
         $identity = Get-StableFileIdentity -RelativePath $relativePath
         $directory = if ([string]::Equals(
             (Split-Path $relativePath -Parent),

@@ -46,8 +46,18 @@ shiori workspace remove <名前、ID、絶対ディレクトリ>
 shiori doctor
 shiori config claude [--port <1-65535>] [--name <サーバー名>]
 shiori config codex [--port <1-65535>] [--name <サーバー名>]
+shiori config init [--language <en-US|ja-JP>]
 shiori serve [--port <1-65535>]
+shiori mcp [--port <1-65535>]
 ```
+
+`serve`はループバックのMCPサーバーを起動し、初回起動時に保護されたMCPトークンを
+作成します。`mcp`はMCPクライアントが起動するstdioブリッジで、保護された
+トークンを読み込み、標準入出力の改行区切りJSON-RPCを
+`http://127.0.0.1:<port>/mcp`へ中継します。`config claude`と`config codex`は
+`shiori mcp`を起動するクライアント設定を出力します。`config init`は
+`config\shiori.ini`が存在しない場合だけ指定言語で作成します。インストーラーが
+これを実行するため、アップグレード時も既存の設定を保持します。
 
 `workspace add`はワークスペースを登録し、コンソールに進捗を表示しながら
 インデックスを自動的に再構築します。登録済みワークスペースがMCPアクセス境界です。
@@ -76,5 +86,5 @@ shiori serve [--port <1-65535>]
 
 検索4 Toolと診断・設定3 Toolは読み取り専用です。ワークスペースおよび
 インデックス管理ToolはローカルSQLiteを変更し、全MCP要求と同じBearer Tokenを
-必要とします。`workspace_add`はファイルシステムのアクセス境界を拡張するため、
-Tokenを厳重に管理してください。`serve`はMCPホスト自身を起動するためCLI専用です。
+必要とします。`workspace_add`はファイルシステムのアクセス境界を拡張します。
+`serve`と`mcp`はMCPホストとその中継ブリッジを起動するためCLI専用です。

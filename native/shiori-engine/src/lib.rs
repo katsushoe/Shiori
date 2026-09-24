@@ -10,13 +10,14 @@ use std::slice;
 mod database;
 mod index;
 
-const ABI_VERSION: u32 = 5;
+const ABI_VERSION: u32 = 6;
 const STATUS_INVALID_ARGUMENT: i32 = 1;
 const STATUS_IO: i32 = 2;
 const STATUS_PANIC: i32 = 255;
 
 struct Engine {
     root: PathBuf,
+    exclude_patterns: Vec<String>,
     database: WorkspaceDatabase,
 }
 
@@ -89,12 +90,17 @@ pub unsafe extern "C" fn shiori_engine_diagnostics(
 }
 
 /// # Safety
-/// `workspace` must be readable for `workspace_length` bytes. `handle` and `error`,
+/// `workspace`, `data_root`, and `exclude_patterns` must be readable for their lengths.
+/// `exclude_patterns` is a `;`-separated gitignore-style pattern list. `handle` and `error`,
 /// when non-null, must point to writable values.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shiori_engine_open(
     workspace: *const u8,
     workspace_length: usize,
+    data_root: *const u8,
+    data_root_length: usize,
+    exclude_patterns: *const u8,
+    exclude_patterns_length: usize,
     handle: *mut *mut c_void,
     error: *mut NativeBuffer,
 ) -> i32 {
@@ -103,6 +109,16 @@ pub unsafe extern "C" fn shiori_engine_open(
             return Err((STATUS_INVALID_ARGUMENT, "handle output is null".to_owned()));
         }
         let workspace = unsafe { read_utf8(workspace, workspace_length) }?;
+        let data_root = unsafe { read_utf8(data_root, data_root_length) }?;
+        if data_root.is_empty() {
+            return Err((STATUS_INVALID_ARGUMENT, "data root is empty".to_owned()));
+        }
+        let exclude_patterns = unsafe { read_utf8(exclude_patterns, exclude_patterns_length) }?
+            .split(';')
+            .map(str::trim)
+            .filter(|pattern| !pattern.is_empty())
+            .map(str::to_owned)
+            .collect();
         let root = Path::new(workspace)
             .canonicalize()
             .map_err(|source| (STATUS_IO, format!("workspace is unavailable: {source}")))?;
@@ -112,11 +128,19 @@ pub unsafe extern "C" fn shiori_engine_open(
                 "workspace is not a directory".to_owned(),
             ));
         }
-        let database = WorkspaceDatabase::open(&root).map_err(|message| (STATUS_IO, message))?;
+        let database = WorkspaceDatabase::open_at(&root, Path::new(data_root))
+            .map_err(|message| (STATUS_IO, message))?;
         database
             .validate()
             .map_err(|message| (STATUS_IO, message))?;
-        unsafe { *handle = Box::into_raw(Box::new(Engine { root, database })).cast() };
+        unsafe {
+            *handle = Box::into_raw(Box::new(Engine {
+                root,
+                exclude_patterns,
+                database,
+            }))
+            .cast()
+        };
         Ok(())
     })
 }
@@ -222,8 +246,8 @@ pub unsafe extern "C" fn shiori_engine_index_directory_count(
             ));
         }
         let engine = unsafe { &*handle.cast::<Engine>() };
-        let value =
-            index::count_directories(&engine.root).map_err(|message| (STATUS_IO, message))?;
+        let value = index::count_directories(&engine.root, &engine.exclude_patterns)
+            .map_err(|message| (STATUS_IO, message))?;
         unsafe { *count = value };
         Ok(())
     })
@@ -250,12 +274,17 @@ pub unsafe extern "C" fn shiori_engine_index_build(
         }
         let status = engine
             .database
-            .build_index(&engine.root, total_directories, |completed, total, path| {
-                if let Some(notify) = callback {
-                    let bytes = path.as_bytes();
-                    unsafe { notify(completed, total, bytes.as_ptr(), bytes.len(), context) };
-                }
-            })
+            .build_index(
+                &engine.root,
+                &engine.exclude_patterns,
+                total_directories,
+                |completed, total, path| {
+                    if let Some(notify) = callback {
+                        let bytes = path.as_bytes();
+                        unsafe { notify(completed, total, bytes.as_ptr(), bytes.len(), context) };
+                    }
+                },
+            )
             .map_err(|message| (STATUS_IO, message))?;
         write_index_status(Ok(status), result)
     })
@@ -358,7 +387,10 @@ fn write_index_status(
 }
 
 unsafe fn read_utf8<'a>(pointer: *const u8, length: usize) -> Result<&'a str, (i32, String)> {
-    if pointer.is_null() && length > 0 {
+    if length == 0 {
+        return Ok("");
+    }
+    if pointer.is_null() {
         return Err((STATUS_INVALID_ARGUMENT, "input pointer is null".to_owned()));
     }
     let bytes = unsafe { slice::from_raw_parts(pointer, length) };

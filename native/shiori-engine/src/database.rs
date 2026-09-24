@@ -44,12 +44,7 @@ pub struct SqliteDiagnostics {
 }
 
 impl WorkspaceDatabase {
-    pub fn open(root: &Path) -> Result<Self, String> {
-        let data_root = platform_data_root()?;
-        Self::open_at(root, &data_root)
-    }
-
-    fn open_at(root: &Path, data_root: &Path) -> Result<Self, String> {
+    pub fn open_at(root: &Path, data_root: &Path) -> Result<Self, String> {
         let normalized_path = normalize_path(root);
         let workspace_id = workspace_id(&normalized_path);
         std::fs::create_dir_all(data_root)
@@ -95,6 +90,7 @@ impl WorkspaceDatabase {
     pub fn build_index(
         &self,
         root: &Path,
+        exclude_patterns: &[String],
         total_directories: u64,
         mut progress: impl FnMut(u64, u64, &str),
     ) -> Result<IndexStatus, String> {
@@ -107,41 +103,46 @@ impl WorkspaceDatabase {
         let mut completed_directories = completed_directory_paths.len() as u64;
         let mut last_file_path = None::<String>;
 
-        let scan_result = index::scan(root, &completed_directory_paths, |event| {
-            match event {
-                ScanEvent::File(file) => {
-                    progress(
-                        completed_directories,
-                        total_directories,
-                        &file.absolute_path,
-                    );
-                    last_file_path = Some(file.absolute_path.clone());
-                    batch_bytes = batch_bytes.saturating_add(file.estimated_bytes());
-                    batch.push(file);
-                    if batch.len() >= BATCH_FILE_LIMIT
-                        || batch_bytes >= BATCH_BYTE_LIMIT
-                        || last_flush.elapsed() >= BATCH_TIME_LIMIT
-                    {
-                        flush_batch(&mut connection, &self.info.id, &generation, &mut batch)?;
+        let scan_result = index::scan(
+            root,
+            exclude_patterns,
+            &completed_directory_paths,
+            |event| {
+                match event {
+                    ScanEvent::File(file) => {
+                        progress(
+                            completed_directories,
+                            total_directories,
+                            &file.absolute_path,
+                        );
+                        last_file_path = Some(file.absolute_path.clone());
+                        batch_bytes = batch_bytes.saturating_add(file.estimated_bytes());
+                        batch.push(file);
+                        if batch.len() >= BATCH_FILE_LIMIT
+                            || batch_bytes >= BATCH_BYTE_LIMIT
+                            || last_flush.elapsed() >= BATCH_TIME_LIMIT
+                        {
+                            flush_batch(&mut connection, &self.info.id, &generation, &mut batch)?;
+                            batch_bytes = 0;
+                            last_flush = Instant::now();
+                        }
+                    }
+                    ScanEvent::DirectoryComplete(path) => {
+                        checkpoint_directory(
+                            &mut connection,
+                            &self.info.id,
+                            &generation,
+                            &path,
+                            &mut batch,
+                        )?;
                         batch_bytes = 0;
                         last_flush = Instant::now();
+                        completed_directories = completed_directories.saturating_add(1);
                     }
                 }
-                ScanEvent::DirectoryComplete(path) => {
-                    checkpoint_directory(
-                        &mut connection,
-                        &self.info.id,
-                        &generation,
-                        &path,
-                        &mut batch,
-                    )?;
-                    batch_bytes = 0;
-                    last_flush = Instant::now();
-                    completed_directories = completed_directories.saturating_add(1);
-                }
-            }
-            Ok(())
-        });
+                Ok(())
+            },
+        );
         scan_result?;
         flush_batch(&mut connection, &self.info.id, &generation, &mut batch)?;
         if completed_directories != total_directories {
@@ -571,35 +572,6 @@ fn generation_id() -> String {
     format!("{}-{nanos}", std::process::id())
 }
 
-fn platform_data_root() -> Result<PathBuf, String> {
-    if let Some(path) = std::env::var_os("SHIORI_DATA_HOME") {
-        return Ok(PathBuf::from(path));
-    }
-    if cfg!(target_os = "windows") {
-        return std::env::var_os("LOCALAPPDATA")
-            .map(PathBuf::from)
-            .map(|path| path.join("Shiori"))
-            .ok_or_else(|| "LOCALAPPDATA is unavailable".to_owned());
-    }
-    if cfg!(target_os = "macos") {
-        return std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .map(|path| {
-                path.join("Library")
-                    .join("Application Support")
-                    .join("Shiori")
-            })
-            .ok_or_else(|| "HOME is unavailable".to_owned());
-    }
-    std::env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local").join("share"))
-        })
-        .map(|path| path.join("shiori"))
-        .ok_or_else(|| "data directory is unavailable".to_owned())
-}
-
 fn normalize_path(root: &Path) -> String {
     let mut value = root.to_string_lossy().replace('\\', "/");
     if cfg!(target_os = "windows") {
@@ -641,7 +613,7 @@ mod tests {
         let mut progress = Vec::new();
 
         let status = database
-            .build_index(&workspace, 2, |completed, total, path| {
+            .build_index(&workspace, &[], 2, |completed, total, path| {
                 progress.push((completed, total, path.to_owned()));
             })
             .expect("index should build");
@@ -678,7 +650,7 @@ mod tests {
         let database = WorkspaceDatabase::open_at(&workspace, &data).expect("database should open");
 
         let status = database
-            .build_index(&workspace, 1, |_, _, _| {})
+            .build_index(&workspace, &[], 1, |_, _, _| {})
             .expect("multi-batch index should build");
 
         assert_eq!(status.indexed_files, 1_005);
@@ -733,7 +705,7 @@ mod tests {
         let mut progress = Vec::new();
 
         let status = database
-            .build_index(&workspace, 3, |completed, _, path| {
+            .build_index(&workspace, &[], 3, |completed, _, path| {
                 progress.push((completed, path.to_owned()));
             })
             .expect("index should resume");
@@ -789,10 +761,10 @@ mod tests {
             .expect("second database should open");
 
         first
-            .build_index(&first_workspace, 1, |_, _, _| {})
+            .build_index(&first_workspace, &[], 1, |_, _, _| {})
             .expect("first index should build");
         second
-            .build_index(&second_workspace, 1, |_, _, _| {})
+            .build_index(&second_workspace, &[], 1, |_, _, _| {})
             .expect("second index should build");
 
         assert_eq!(first.info().database_path, second.info().database_path);

@@ -13,7 +13,13 @@
            Codepage="65001"
            Scope="perUser">
 
-    <MajorUpgrade DowngradeErrorMessage="A newer version of Shiori is already installed." />
+    <!--
+      The previous version is removed after the new one is installed so that
+      components shared by GUID, including LanguageConfig, keep a client and
+      the old product's uninstall cannot delete user settings.
+    -->
+    <MajorUpgrade Schedule="afterInstallExecute"
+                  DowngradeErrorMessage="A newer version of Shiori is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
     <!--
@@ -63,14 +69,15 @@
       <CreateFolder />
       <RegistryValue Root="HKCU" Key="Software\Akatsukisoft\Shiori\Components" Name="ConfigDirectory" Type="integer" Value="1" KeyPath="yes" />
     </Component>
-    <Component Id="LanguageConfig" Directory="CONFIGFOLDER" Guid="0a2a3833-0196-4f9c-a2d2-919a75923c96" Permanent="yes" NeverOverwrite="yes">
-      <IniFile Id="WriteLanguageConfig"
-               Name="shiori.ini"
-               Directory="CONFIGFOLDER"
-               Section="general"
-               Key="language"
-               Value="[SHIORI_LANGUAGE]"
-               Action="addLine" />
+    <!--
+      shiori.ini is user data and is not an MSI resource. Earlier versions
+      wrote it through the IniFile table, so uninstalling them removed the
+      language entry during upgrades. This component keeps its GUID without
+      the IniFile row so it stays shared with those versions and their
+      uninstall leaves the file alone. InitializeConfig creates the file only
+      when it does not exist.
+    -->
+    <Component Id="LanguageConfig" Directory="CONFIGFOLDER" Guid="0a2a3833-0196-4f9c-a2d2-919a75923c96" Permanent="yes">
       <RegistryValue Root="HKCU" Key="Software\Akatsukisoft\Shiori\Components" Name="LanguageConfig" Type="integer" Value="1" KeyPath="yes" />
     </Component>
     <Component Id="PreserveLogsDirectory" Directory="LOGSFOLDER" Guid="128795bb-ede7-443f-9f89-8750b9baca8d">
@@ -119,6 +126,16 @@
       <RemoveFolder Id="RemoveInstallFolder" Directory="INSTALLFOLDER" On="uninstall" />
       <RemoveFolder Id="RemoveProgramsFolderIfEmpty" Directory="ProgramsFolder" On="uninstall" />
     </Component>
+
+    <CustomAction Id="InitializeConfig"
+                  Directory="BINFOLDER"
+                  ExeCommand="&quot;[BINFOLDER]shiori.exe&quot; config init --language [SHIORI_LANGUAGE]"
+                  Execute="deferred"
+                  Impersonate="yes"
+                  Return="check" />
+    <InstallExecuteSequence>
+      <Custom Action="InitializeConfig" After="InstallFiles" Condition='NOT REMOVE~="ALL"' />
+    </InstallExecuteSequence>
 
     <Feature Id="MainFeature" Title="Shiori" Level="1">
       <ComponentGroupRef Id="BinFiles" />

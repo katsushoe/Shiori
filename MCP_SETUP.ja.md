@@ -3,14 +3,13 @@
 [English](MCP_SETUP.md) | [日本語](MCP_SETUP.ja.md)
 
 このガイドでは、ローカルで動作するShioriサーバーをAIコーディングエージェントへ
-接続します。全環境変数は[CONFIG.ja.md](CONFIG.ja.md)、CLIの詳細は
+接続します。全設定は[CONFIG.ja.md](CONFIG.ja.md)、CLIの詳細は
 [COMMANDS.ja.md](COMMANDS.ja.md)を参照してください。
 
 ## 値とプレースホルダー
 
 | 値 | 取得方法 | 例 | 変更条件 |
 | :--- | :--- | :--- | :--- |
-| MCPトークン | 32文字以上のランダム値を生成 | 生成したGUID | 認証情報の新規作成・ローテーション時 |
 | ワークスペースパス | 存在する絶対ディレクトリパスを取得 | `F:\Projects\One` | 別のワークスペースを許可する時 |
 | ポート | 未使用のループバックTCPポートを選択 | `39473` | 既定ポートが使用できない時 |
 | サーバー名 | クライアント表示用識別子を選択 | `shiori` | 複数のShioriサーバーを登録する時 |
@@ -25,21 +24,22 @@
 - 存在する絶対ディレクトリをワークスペースとして1つ以上選びます。
 - インストーラで`PATH`へ追加した場合は、新しいターミナルを開きます。
 
-## 認証と環境設定
+## 認証
 
-32文字以上のベアラートークンを作成し、MCPからアクセスできるワークスペース
-ルートを登録します。
+MCPからアクセスできるワークスペースルートを登録します。
 
 ```powershell
-$env:SHIORI_MCP_TOKEN = ([guid]::NewGuid().ToString('N'))
 shiori workspace add F:\Projects\One
 shiori workspace add F:\Projects\Two
 shiori doctor
 ```
 
-クライアントとサーバーのプロセスには同じトークンを設定してください。トークンを
-コミット対象の設定ファイルへ書かないでください。中央`Workspaces`テーブルが
-サーバー境界を定義します。
+トークンの設定は不要です。初回の`shiori serve`または`shiori mcp`実行時に、
+ランダムなベアラートークンを現在のユーザー用のWindows DPAPIで暗号化し、
+`config\mcp-token.bin`へ保存します。クライアントはトークンを扱わず、
+stdioブリッジ`shiori mcp`がトークンを読み込んでサーバーへ要求を中継します。
+サーバーとクライアントは同じWindowsユーザーで実行してください。中央
+`Workspaces`テーブルがサーバー境界を定義します。
 
 ## サーバー起動
 
@@ -59,7 +59,8 @@ Shioriは初期化時に、目的、推奨検索手順、本文検索を行わ�
 ## クライアント登録
 
 クライアント登録はShioriを検出できる範囲を制御します。ファイルアクセスは
-`shiori workspace add`で登録したワークスペースだけに制限されます。
+`shiori workspace add`で登録したワークスペースだけに制限されます。どちらの
+クライアントも`shiori mcp`を起動するため、`shiori`が`PATH`上に必要です。
 
 ### Claude Code（推奨）
 
@@ -70,19 +71,17 @@ Shioriは初期化時に、目的、推奨検索手順、本文検索を行わ�
 {
   "mcpServers": {
     "shiori": {
-      "type": "http",
-      "url": "http://127.0.0.1:39473/mcp",
-      "headers": {
-        "Authorization": "Bearer ${SHIORI_MCP_TOKEN}"
-      }
+      "type": "stdio",
+      "command": "shiori",
+      "args": ["mcp", "--port", "39473"]
     }
   }
 }
 ```
 
-`shiori`はクライアントに表示されるサーバー名、`type`はHTTP Transport、`url`は
-`shiori serve`へ渡したポートに合わせる接続先です。認証ヘッダーはクライアント
-プロセスの環境変数からトークンを参照します。秘密値へ置き換えないでください。
+`shiori`はクライアントに表示されるサーバー名、`type`はstdio Transportです。
+`--port`は`shiori serve`へ渡したポートに合わせます。秘密値を含まないため、
+このファイルはコミットできます。
 
 変更後はClaude Codeを再起動または再読込し、`/mcp`で確認します。
 
@@ -97,8 +96,7 @@ shiori config claude > .mcp.json
 
 リダイレクトはファイルを上書きするため、新規作成時だけ使用してください。
 `.mcp.json`が存在する場合は、生成された`mcpServers.shiori`項目を統合します。
-`SHIORI_MCP_TOKEN`を持つ環境からClaude Codeを起動し、変更後は再起動または
-再読込して`/mcp`で確認します。
+変更後はClaude Codeを再起動または再読込して`/mcp`で確認します。
 
 ### Codex（推奨）
 
@@ -106,14 +104,13 @@ shiori config claude > .mcp.json
 
 ```toml
 [mcp_servers.shiori]
-url = "http://127.0.0.1:39473/mcp"
-bearer_token_env_var = "SHIORI_MCP_TOKEN"
+command = "shiori"
+args = ["mcp", "--port", "39473"]
 ```
 
-`shiori`はクライアントに表示されるサーバー名です。`url`を指定するとHTTP
-Transportになり、`shiori serve`へ渡したポートに合わせます。Shioriは別プロセスで
-起動するためローカル起動Commandは不要です。`bearer_token_env_var`により、秘密値を
-TOMLへ保存せず、Codexプロセスの環境変数からベアラートークンを参照します。
+`shiori`はクライアントに表示されるサーバー名です。`command`と`args`で
+stdioブリッジを起動し、`--port`は`shiori serve`へ渡したポートに合わせます。
+TOMLに秘密値は含まれません。
 
 変更後はCodexを再起動するか、新しいタスクを開始します。
 
@@ -125,8 +122,8 @@ TOMLへ保存せず、Codexプロセスの環境変数からベアラートー�
 shiori config codex
 ```
 
-他のCodex設定を置き換えずに出力を統合し、Codexへ`SHIORI_MCP_TOKEN`を渡して、
-Codexを再起動するか新しいタスクを開始します。
+他のCodex設定を置き換えずに出力を統合し、Codexを再起動するか新しいタスクを
+開始します。
 
 ## 複数ワークスペース
 
@@ -163,8 +160,10 @@ shiori workspace add F:\Projects\Two
 
 ### 認証エラー
 
-サーバーとクライアントが同じ`SHIORI_MCP_TOKEN`を継承しているか確認します。
-トークンは32文字以上必要です。変更後は両方のプロセスを再起動してください。
+サーバーとMCPクライアントが同じWindowsユーザーで動作しているか確認します。
+別ユーザーではブリッジがトークンを復号できません。サーバー稼働中にトークンを
+ローテーションした場合は、サーバーとクライアントを再起動してください。現在の
+ユーザーで復号できない場合、`shiori doctor`は`mcp_token`を`error`と報告します。
 
 ### ワークスペースが拒否または未検出
 
@@ -173,8 +172,9 @@ shiori workspace add F:\Projects\Two
 
 ### 接続拒否
 
-`shiori serve`が動作中で、クライアントとサーバーのポートが一致し、URLが
-`http://127.0.0.1:<port>/mcp`であることを確認します。
+`shiori serve`が動作中で、クライアント設定の`--port`がサーバーのポートと
+一致していることを確認します。サーバーへ接続できない場合、ブリッジは
+JSON-RPCエラーを返します。
 
 ### 検索結果が古い
 

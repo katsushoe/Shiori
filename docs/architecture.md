@@ -37,5 +37,9 @@ memory-backed temporary storage.
 
 The MCP endpoint is stateless and binds only to `127.0.0.1`. Host filtering,
 loopback Origin validation, and a bearer token protect the endpoint from DNS
-rebinding and unauthorized local callers. The native engine registry opens only
-exact workspace paths listed in `SHIORI_ALLOWED_WORKSPACES`.
+rebinding and unauthorized local callers. The token is generated on first use
+and stored in `config\mcp-token.bin`, encrypted with DPAPI for the current
+Windows user. MCP clients connect through the `shiori mcp` stdio bridge, which
+reads that token, so client configuration contains no secret. The native engine
+registry opens only exact workspace paths registered in `shiori.db`. See
+[ADR 0005](adr/0005-no-environment-variables.md).
