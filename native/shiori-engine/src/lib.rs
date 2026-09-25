@@ -1,6 +1,6 @@
 #![allow(linker_messages)]
 
-use database::{IndexStatus, WorkspaceDatabase};
+use database::{IndexStatus, SearchQuery, WorkspaceDatabase};
 use serde::Serialize;
 use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -10,7 +10,7 @@ use std::slice;
 mod database;
 mod index;
 
-const ABI_VERSION: u32 = 6;
+const ABI_VERSION: u32 = 7;
 const STATUS_INVALID_ARGUMENT: i32 = 1;
 const STATUS_IO: i32 = 2;
 const STATUS_PANIC: i32 = 255;
@@ -170,12 +170,18 @@ pub unsafe extern "C" fn shiori_engine_workspace_info(
 }
 
 /// # Safety
-/// `handle` must be open and `query` must be readable for `query_length` bytes.
+/// `handle` must be open. `query`, `name_prefix`, and `name_suffix` must be readable for
+/// their lengths; an empty value means the condition is not used.
 #[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
 pub unsafe extern "C" fn shiori_engine_search_files(
     handle: *mut c_void,
     query: *const u8,
     query_length: usize,
+    name_prefix: *const u8,
+    name_prefix_length: usize,
+    name_suffix: *const u8,
+    name_suffix_length: usize,
     limit: usize,
     result: *mut NativeBuffer,
     error: *mut NativeBuffer,
@@ -188,13 +194,13 @@ pub unsafe extern "C" fn shiori_engine_search_files(
             ));
         }
         let engine = unsafe { &*handle.cast::<Engine>() };
-        let query = unsafe { read_utf8(query, query_length) }?
-            .trim()
-            .to_lowercase();
-        if query.is_empty() {
+        let query = unsafe { read_condition(query, query_length) }?;
+        let name_prefix = unsafe { read_condition(name_prefix, name_prefix_length) }?;
+        let name_suffix = unsafe { read_condition(name_suffix, name_suffix_length) }?;
+        if query.is_none() && name_prefix.is_none() && name_suffix.is_none() {
             return Err((
                 STATUS_INVALID_ARGUMENT,
-                "query must not be empty".to_owned(),
+                "query, name prefix, or name suffix must not be empty".to_owned(),
             ));
         }
         let status = engine
@@ -207,9 +213,14 @@ pub unsafe extern "C" fn shiori_engine_search_files(
                 "workspace index is not ready; run shiori index build".to_owned(),
             ));
         }
+        let search = SearchQuery {
+            text: query.as_deref(),
+            name_prefix: name_prefix.as_deref(),
+            name_suffix: name_suffix.as_deref(),
+        };
         let matches = engine
             .database
-            .search_files(&query, limit)
+            .search_files(&search, limit)
             .map_err(|message| (STATUS_IO, message))?;
         unsafe { *result = NativeBuffer::from_string(serialize_results(&matches)) };
         Ok(())
@@ -400,6 +411,15 @@ unsafe fn read_utf8<'a>(pointer: *const u8, length: usize) -> Result<&'a str, (i
             format!("input is not UTF-8: {source}"),
         )
     })
+}
+
+/// Reads an optional search condition, trimmed and lowercased like the path query.
+unsafe fn read_condition(
+    pointer: *const u8,
+    length: usize,
+) -> Result<Option<String>, (i32, String)> {
+    let value = unsafe { read_utf8(pointer, length) }?.trim().to_lowercase();
+    Ok((!value.is_empty()).then_some(value))
 }
 
 fn serialize_results(results: &[PathBuf]) -> String {

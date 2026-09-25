@@ -14,7 +14,7 @@ public sealed class WorkspaceCoordinatorTests
         var second = CreateEngine("second", "Second", "SecondResult.cs");
         var coordinator = new WorkspaceCoordinator(new FakeProvider(first, second));
 
-        var response = await coordinator.SearchFilesAsync("Result", null, 10, CancellationToken.None);
+        var response = await coordinator.SearchFilesAsync(new FileSearchQuery("Result"), null, 10, CancellationToken.None);
 
         Assert.Empty(response.Errors);
         Assert.Equal(2, response.Results.Count);
@@ -32,7 +32,7 @@ public sealed class WorkspaceCoordinatorTests
         var engine = CreateEngine("first", "First", "FirstResult.cs");
         var coordinator = new WorkspaceCoordinator(new FakeProvider(engine));
 
-        var response = await coordinator.SearchFilesAsync("Result", null, 10, CancellationToken.None);
+        var response = await coordinator.SearchFilesAsync(new FileSearchQuery("Result"), null, 10, CancellationToken.None);
         var json = JsonSerializer.Serialize(response, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
         Assert.Contains("\"elapsedMilliseconds\":", json, StringComparison.Ordinal);
@@ -45,7 +45,7 @@ public sealed class WorkspaceCoordinatorTests
         var failed = CreateEngine("failed", "Failed", "Ignored.cs", failSearch: true);
         var coordinator = new WorkspaceCoordinator(new FakeProvider(healthy, failed));
 
-        var response = await coordinator.SearchFilesAsync("Result", null, 10, CancellationToken.None);
+        var response = await coordinator.SearchFilesAsync(new FileSearchQuery("Result"), null, 10, CancellationToken.None);
 
         Assert.Single(response.Results);
         var error = Assert.Single(response.Errors);
@@ -63,7 +63,7 @@ public sealed class WorkspaceCoordinatorTests
         var engine = CreateEngine("empty", "Empty", "Ignored.cs", status: "not_indexed");
         var coordinator = new WorkspaceCoordinator(new FakeProvider(engine));
 
-        var response = await coordinator.SearchFilesAsync("Result", null, 10, CancellationToken.None);
+        var response = await coordinator.SearchFilesAsync(new FileSearchQuery("Result"), null, 10, CancellationToken.None);
 
         Assert.Empty(response.Results);
         Assert.Single(response.Errors);
@@ -84,13 +84,26 @@ public sealed class WorkspaceCoordinatorTests
         var engine = CreateEngine("interrupted", "Interrupted", "Ignored.cs", failSearch: true, status: "indexing");
         var coordinator = new WorkspaceCoordinator(new FakeProvider(engine));
 
-        var response = await coordinator.SearchFilesAsync("Result", null, 10, CancellationToken.None);
+        var response = await coordinator.SearchFilesAsync(new FileSearchQuery("Result"), null, 10, CancellationToken.None);
 
         var summary = Assert.Single(response.Workspaces);
         Assert.Equal("NG", summary.SearchResult);
         Assert.Equal("indexing", summary.IndexStatus);
         Assert.Equal("index_resume_confirmation", summary.ActionRequired);
         Assert.Equal("index_build", summary.SuggestedTool);
+    }
+
+    [Fact]
+    public async Task SearchFilesAsync_WithNameConditionsOnly_PassesConditionsToEngine()
+    {
+        var engine = CreateEngine("first", "First", "src/FirstResult.cs");
+        var coordinator = new WorkspaceCoordinator(new FakeProvider(engine));
+        var query = FileSearchQuery.Create(null, "First", ".cs");
+
+        var response = await coordinator.SearchFilesAsync(query, null, 10, CancellationToken.None);
+
+        Assert.Equal(query, engine.LastQuery);
+        Assert.Equal("src/FirstResult.cs", Assert.Single(response.Results).Path);
     }
 
     private static FakeEngine CreateEngine(
@@ -136,14 +149,16 @@ public sealed class WorkspaceCoordinatorTests
     {
         public uint AbiVersion => 3;
         public WorkspaceInfo Info { get; } = info;
+        public FileSearchQuery? LastQuery { get; private set; }
 
         public WorkspaceInfo GetWorkspaceInfo() => Info;
         public IndexStatus GetIndexStatus() => Status();
         public ulong CountIndexDirectories() => 1;
         public IndexStatus BuildIndex(ulong totalDirectories, Action<IndexProgress>? progress = null) => Status();
 
-        public IReadOnlyList<SearchResult> SearchFiles(string query, int limit = 20)
+        public IReadOnlyList<SearchResult> SearchFiles(FileSearchQuery query, int limit = 20)
         {
+            LastQuery = query;
             if (failSearch) throw new InvalidOperationException("search failed");
             return [new SearchResult("file", resultPath, null, null)];
         }

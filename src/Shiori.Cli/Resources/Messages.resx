@@ -16,13 +16,13 @@
   <data name="IndexCommandRequired" xml:space="preserve"><value>index requires build, status, or rebuild.</value></data>
   <data name="IndexWorkspaceRequired" xml:space="preserve"><value>index requires a registered workspace path.</value></data>
   <data name="UnknownIndexCommand" xml:space="preserve"><value>Unknown index command: {0}</value></data>
-  <data name="FindQueryRequired" xml:space="preserve"><value>find requires a query.</value></data>
+  <data name="FindQueryRequired" xml:space="preserve"><value>find requires a query, --name-starts-with, or --name-ends-with.</value></data>
   <data name="IndexStart" xml:space="preserve"><value>Creating index: {0}</value></data>
   <data name="IndexProgress" xml:space="preserve"><value>{0}% {1}/{2} {3}</value></data>
   <data name="IndexComplete" xml:space="preserve"><value>Index creation completed: {0} ({1} files)</value></data>
   <data name="Usage" xml:space="preserve"><value>Usage:
     shiori version
-    shiori find &lt;query&gt; [--allow &lt;directory&gt; ...] [--limit &lt;1-100&gt;]
+    shiori find [&lt;query&gt;] [--name-starts-with &lt;text&gt;] [--name-ends-with &lt;text&gt;] [--allow &lt;directory&gt; ...] [--limit &lt;1-100&gt;]
   shiori index build &lt;directory&gt;
   shiori index status &lt;directory&gt;
   shiori index rebuild &lt;directory&gt;

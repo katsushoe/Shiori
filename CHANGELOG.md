@@ -4,6 +4,15 @@ All notable changes to Shiori are documented in this file.
 
 ## [Unreleased]
 
+## [2.4.2] - 2026-09-25
+
+### Added
+
+- Added file-name prefix and suffix search: `nameStartsWith` / `nameEndsWith`
+  for MCP `search_files`, and `--name-starts-with` / `--name-ends-with` for
+  `shiori find`. `query` is now optional when a name condition is given.
+- The native engine ABI is now version 7.
+
 ## [2.4.1] - 2026-09-24
 
 ### Added

@@ -146,10 +146,14 @@ static void WriteProgress(IndexProgress progress)
 
 static async Task<int> RunFindAsync(string[] arguments)
 {
-    if (arguments.Length == 0)
+    var text = arguments.Length > 0 && !arguments[0].StartsWith("--", StringComparison.Ordinal) ? arguments[0] : null;
+    var nameStartsWith = GetOption(arguments, "--name-starts-with");
+    var nameEndsWith = GetOption(arguments, "--name-ends-with");
+    if (string.IsNullOrWhiteSpace(text) && string.IsNullOrWhiteSpace(nameStartsWith) && string.IsNullOrWhiteSpace(nameEndsWith))
     {
         return Fail(CliText.Get("FindQueryRequired"));
     }
+    var query = FileSearchQuery.Create(text, nameStartsWith, nameEndsWith);
     var limit = int.TryParse(GetOption(arguments, "--limit"), out var parsed) ? parsed : 20;
     var registered = await new WorkspaceRegistry().ListAsync().ConfigureAwait(false);
     using var engines = new NativeEngineRegistry(
@@ -158,7 +162,7 @@ static async Task<int> RunFindAsync(string[] arguments)
     var coordinator = new WorkspaceCoordinator(engines);
     var requested = GetOptions(arguments, "--allow");
     var response = await coordinator
-        .SearchFilesAsync(arguments[0], requested.Count == 0 ? null : requested, limit, CancellationToken.None)
+        .SearchFilesAsync(query, requested.Count == 0 ? null : requested, limit, CancellationToken.None)
         .ConfigureAwait(false);
     WriteJson(response);
     return 0;
