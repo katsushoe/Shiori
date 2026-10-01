@@ -155,20 +155,28 @@ public sealed class NativeShioriEngine : IShioriEngine
     }
 
     /// <inheritdoc />
-    public unsafe IReadOnlyList<SearchResult> SearchFiles(string query, int limit = 20)
+    public unsafe IReadOnlyList<SearchResult> SearchFiles(FileSearchQuery query, int limit = 20)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        ArgumentException.ThrowIfNullOrWhiteSpace(query);
+        ArgumentNullException.ThrowIfNull(query);
         ArgumentOutOfRangeException.ThrowIfLessThan(limit, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(limit, 100);
 
-        var bytes = Encoding.UTF8.GetBytes(query);
+        var bytes = Encoding.UTF8.GetBytes(query.Text ?? string.Empty);
+        var prefixBytes = Encoding.UTF8.GetBytes(query.NameStartsWith ?? string.Empty);
+        var suffixBytes = Encoding.UTF8.GetBytes(query.NameEndsWith ?? string.Empty);
         fixed (byte* pointer = bytes)
+        fixed (byte* prefixPointer = prefixBytes)
+        fixed (byte* suffixPointer = suffixBytes)
         {
             var status = NativeAbi.SearchFiles(
                 _handle,
                 pointer,
                 (nuint)bytes.Length,
+                prefixPointer,
+                (nuint)prefixBytes.Length,
+                suffixPointer,
+                (nuint)suffixBytes.Length,
                 (nuint)limit,
                 out var result,
                 out var error);

@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Reflection;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using Shiori.Core.Engine;
 using Shiori.Core.Integration;
@@ -40,32 +41,46 @@ internal sealed class ShioriTools
     }
 
     [McpServerTool(Name = "search_files", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-    [Description("Searches file names and paths across one, several, or all allowed workspaces. Always present SummaryMarkdown and ElapsedMilliseconds to the user. If a workspace reports an index build or resume confirmation action, ask the user before calling index_build.")]
+    [Description("Searches file names and paths across one, several, or all allowed workspaces. Specify query, nameStartsWith, nameEndsWith, or a combination; every supplied condition must match. Always present SummaryMarkdown and ElapsedMilliseconds to the user. If a workspace reports an index build or resume confirmation action, ask the user before calling index_build.")]
     public static async Task<WorkspaceSearchFilesResponse> SearchFiles(
-        [Description("File name or relative path fragment to search for.")] string query,
         WorkspaceCoordinator coordinator,
         ILogger<ShioriTools> logger,
+        [Description("Optional fragment anywhere in the file name or relative path.")] string? query = null,
+        [Description("Optional text the file name must start with, case-insensitive for ASCII.")] string? nameStartsWith = null,
+        [Description("Optional text the file name must end with, case-insensitive for ASCII, such as .cs.")] string? nameEndsWith = null,
         [Description("Optional absolute allowed workspace.")] string? workspace = null,
         [Description("Optional absolute allowed workspace paths.")] string[]? workspaces = null,
         [Description("Maximum number of results from 1 to 100.")] int limit = 20,
         CancellationToken cancellationToken = default)
     {
+        FileSearchQuery search;
+        try
+        {
+            search = FileSearchQuery.Create(query, nameStartsWith, nameEndsWith);
+        }
+        catch (ArgumentException exception)
+        {
+            // Invalid input is reported to the client instead of the SDK's generic tool error.
+            throw new McpException(exception.Message, exception);
+        }
+
+        var label = search.ToString();
         var selected = MergeWorkspaceSelectors(workspace, workspaces);
         var workspaceLabel = selected is null ? null : string.Join(",", selected);
         var stopwatch = Stopwatch.StartNew();
         try
         {
             var response = await coordinator
-                .SearchFilesAsync(query, selected, limit, cancellationToken)
+                .SearchFilesAsync(search, selected, limit, cancellationToken)
                 .ConfigureAwait(false);
             stopwatch.Stop();
             logger.LogSearchSucceeded(
-                "search_files", query, workspaceLabel, response.Results.Count, response.ElapsedMilliseconds);
+                "search_files", label, workspaceLabel, response.Results.Count, response.ElapsedMilliseconds);
             if (response.Errors.Count > 0)
             {
                 logger.LogSearchPartialErrors(
                     "search_files",
-                    query,
+                    label,
                     response.Errors.Select(error => $"{error.Workspace}: {error.Message}").ToArray());
             }
             return response;
@@ -74,7 +89,7 @@ internal sealed class ShioriTools
         {
             stopwatch.Stop();
             logger.LogSearchFailed(
-                "search_files", query, workspaceLabel, stopwatch.Elapsed.TotalMilliseconds, exception);
+                "search_files", label, workspaceLabel, stopwatch.Elapsed.TotalMilliseconds, exception);
             throw;
         }
     }

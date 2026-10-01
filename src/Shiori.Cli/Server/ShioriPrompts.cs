@@ -24,7 +24,7 @@ internal sealed class ShioriPrompts
 
         Recommended workflow:
         1. Call workspace_list to see which local directories are registered and available.
-        2. Call search_files with words from the expected file name or path. Omit workspace selectors to search every registered workspace, or specify one or more selectors to narrow the scope.
+        2. Call search_files with words from the expected file name or path. Use nameStartsWith or nameEndsWith when the file name must start or end with specific text, such as a product name or an extension. Omit workspace selectors to search every registered workspace, or specify one or more selectors to narrow the scope.
         3. Use search when you want a compact summary instead of structured file results.
         4. Call index_status if expected files are missing or results may be stale.
         5. After locating a file, use an appropriate filesystem tool to read its contents; Shiori only indexes file names, paths, and metadata.

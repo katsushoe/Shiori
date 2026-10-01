@@ -43,6 +43,27 @@ pub struct SqliteDiagnostics {
     pub quick_check: String,
 }
 
+/// File search conditions; every supplied condition must match, case-insensitively for ASCII.
+#[derive(Default)]
+pub struct SearchQuery<'a> {
+    /// Fragment anywhere in the relative path.
+    pub text: Option<&'a str>,
+    /// Required start of the file name.
+    pub name_prefix: Option<&'a str>,
+    /// Required end of the file name.
+    pub name_suffix: Option<&'a str>,
+}
+
+#[cfg(test)]
+impl<'a> SearchQuery<'a> {
+    fn text(value: &'a str) -> Self {
+        Self {
+            text: Some(value),
+            ..Self::default()
+        }
+    }
+}
+
 impl WorkspaceDatabase {
     pub fn open_at(root: &Path, data_root: &Path) -> Result<Self, String> {
         let normalized_path = normalize_path(root);
@@ -162,9 +183,19 @@ impl WorkspaceDatabase {
         read_index_status(&connection, &self.info.id)
     }
 
-    pub fn search_files(&self, query: &str, limit: usize) -> Result<Vec<PathBuf>, String> {
+    pub fn search_files(
+        &self,
+        query: &SearchQuery<'_>,
+        limit: usize,
+    ) -> Result<Vec<PathBuf>, String> {
         let connection = self.lock()?;
-        let pattern = format!("%{}%", escape_like(query));
+        let text = query.text.map(|value| format!("%{}%", escape_like(value)));
+        let name_prefix = query
+            .name_prefix
+            .map(|value| format!("{}%", escape_like(value)));
+        let name_suffix = query
+            .name_suffix
+            .map(|value| format!("%{}", escape_like(value)));
         let mut statement = connection
             .prepare(
                 "SELECT files.relative_path
@@ -173,15 +204,18 @@ impl WorkspaceDatabase {
                    ON state.workspace_id = files.workspace_id
                   AND state.active_generation = files.generation_id
                  WHERE files.workspace_id = ?1
-                   AND files.relative_path LIKE ?2 ESCAPE '\\'
+                   AND (?2 IS NULL OR files.relative_path LIKE ?2 ESCAPE '\\')
+                   AND (?3 IS NULL OR files.file_name LIKE ?3 ESCAPE '\\')
+                   AND (?4 IS NULL OR files.file_name LIKE ?4 ESCAPE '\\')
                  ORDER BY files.relative_path COLLATE NOCASE
-                 LIMIT ?3",
+                 LIMIT ?5",
             )
             .map_err(|source| format!("cannot prepare file search: {source}"))?;
         let rows = statement
-            .query_map(params![self.info.id, pattern, limit as i64], |row| {
-                row.get::<_, String>(0)
-            })
+            .query_map(
+                params![self.info.id, text, name_prefix, name_suffix, limit as i64],
+                |row| row.get::<_, String>(0),
+            )
             .map_err(|source| format!("cannot search file index: {source}"))?;
         rows.map(|row| {
             row.map(PathBuf::from)
@@ -596,7 +630,7 @@ fn workspace_id(normalized_path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::WorkspaceDatabase;
+    use super::{SearchQuery, WorkspaceDatabase};
     use std::fs;
     use std::path::Path;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -618,7 +652,7 @@ mod tests {
             })
             .expect("index should build");
         let results = database
-            .search_files("main", 20)
+            .search_files(&SearchQuery::text("main"), 20)
             .expect("index should search");
 
         assert_eq!(status.status, "ready");
@@ -633,6 +667,70 @@ mod tests {
                 .all(|(_, _, path)| Path::new(path).is_absolute())
         );
         assert_eq!(results, [std::path::PathBuf::from("src/main.rs")]);
+        drop(database);
+        fs::remove_dir_all(test_root).expect("test directory should be removed");
+    }
+
+    #[test]
+    fn search_files_matches_file_name_prefix_and_suffix() {
+        let test_root = temporary_root();
+        let workspace = test_root.join("workspace");
+        let data = test_root.join("data");
+        fs::create_dir_all(workspace.join("ThunderbirdPortable"))
+            .expect("folder should be created");
+        for name in [
+            "ThunderbirdPortable.exe",
+            "Thunderbird_Setup.msi",
+            "readme.txt",
+        ] {
+            fs::write(workspace.join("ThunderbirdPortable").join(name), "")
+                .expect("test file should be written");
+        }
+        fs::write(workspace.join("thunderbird.log"), "").expect("test file should be written");
+        let database = WorkspaceDatabase::open_at(&workspace, &data).expect("database should open");
+        database
+            .build_index(&workspace, &[], 2, |_, _, _| {})
+            .expect("index should build");
+        let search = |query: SearchQuery<'_>| {
+            let mut paths = database
+                .search_files(&query, 20)
+                .expect("index should search")
+                .into_iter()
+                .map(|path| path.to_string_lossy().into_owned())
+                .collect::<Vec<_>>();
+            paths.sort();
+            paths
+        };
+
+        let prefix = search(SearchQuery {
+            name_prefix: Some("thunderbird"),
+            ..SearchQuery::default()
+        });
+        let suffix = search(SearchQuery {
+            name_suffix: Some(".EXE"),
+            ..SearchQuery::default()
+        });
+        let combined = search(SearchQuery {
+            name_prefix: Some("Thunderbird"),
+            name_suffix: Some(".msi"),
+            ..SearchQuery::default()
+        });
+        let literal = search(SearchQuery {
+            name_prefix: Some("Thunderbird_"),
+            ..SearchQuery::default()
+        });
+
+        assert_eq!(
+            prefix,
+            [
+                "ThunderbirdPortable/ThunderbirdPortable.exe",
+                "ThunderbirdPortable/Thunderbird_Setup.msi",
+                "thunderbird.log",
+            ]
+        );
+        assert_eq!(suffix, ["ThunderbirdPortable/ThunderbirdPortable.exe"]);
+        assert_eq!(combined, ["ThunderbirdPortable/Thunderbird_Setup.msi"]);
+        assert_eq!(literal, ["ThunderbirdPortable/Thunderbird_Setup.msi"]);
         drop(database);
         fs::remove_dir_all(test_root).expect("test directory should be removed");
     }
@@ -710,7 +808,7 @@ mod tests {
             })
             .expect("index should resume");
         let results = database
-            .search_files(".txt", 20)
+            .search_files(&SearchQuery::text(".txt"), 20)
             .expect("index should search");
 
         assert_eq!(status.indexed_files, 2);
@@ -770,20 +868,20 @@ mod tests {
         assert_eq!(first.info().database_path, second.info().database_path);
         assert_eq!(
             first
-                .search_files("first", 20)
+                .search_files(&SearchQuery::text("first"), 20)
                 .expect("first search should work")
                 .len(),
             1
         );
         assert!(
             first
-                .search_files("second", 20)
+                .search_files(&SearchQuery::text("second"), 20)
                 .expect("isolated search should work")
                 .is_empty()
         );
         assert_eq!(
             second
-                .search_files("second", 20)
+                .search_files(&SearchQuery::text("second"), 20)
                 .expect("second search should work")
                 .len(),
             1

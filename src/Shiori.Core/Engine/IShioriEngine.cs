@@ -19,5 +19,5 @@ public interface IShioriEngine : IDisposable
     IndexStatus BuildIndex(ulong totalDirectories, Action<IndexProgress>? progress = null);
 
     /// <summary>Searches file names and paths in the allowed workspace.</summary>
-    IReadOnlyList<SearchResult> SearchFiles(string query, int limit = 20);
+    IReadOnlyList<SearchResult> SearchFiles(FileSearchQuery query, int limit = 20);
 }

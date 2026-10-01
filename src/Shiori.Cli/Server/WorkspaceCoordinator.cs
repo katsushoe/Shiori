@@ -18,12 +18,12 @@ public sealed class WorkspaceCoordinator
 
     /// <summary>Searches selected workspaces concurrently and returns workspace-tagged results.</summary>
     public async Task<WorkspaceSearchFilesResponse> SearchFilesAsync(
-        string query,
+        FileSearchQuery query,
         IReadOnlyList<string>? workspaces,
         int limit,
         CancellationToken cancellationToken)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(query);
+        ArgumentNullException.ThrowIfNull(query);
         if (limit is < 1 or > 100)
         {
             throw new ArgumentOutOfRangeException(nameof(limit), "Limit must be from 1 to 100.");
@@ -37,7 +37,7 @@ public sealed class WorkspaceCoordinator
         var responses = await Task.WhenAll(searches).ConfigureAwait(false);
         var results = responses
             .SelectMany(response => response.Results)
-            .OrderBy(result => FileRank(result.Path, query))
+            .OrderBy(result => FileRank(result.Path, query.RankingTerm))
             .ThenBy(result => result.Path.Length)
             .ThenBy(result => result.WorkspaceName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(result => result.Path, StringComparer.OrdinalIgnoreCase)
@@ -73,7 +73,7 @@ public sealed class WorkspaceCoordinator
 
     private async Task<SearchWorkspaceResponse> SearchWorkspaceAsync(
         string workspace,
-        string query,
+        FileSearchQuery query,
         int limit,
         SemaphoreSlim concurrency,
         CancellationToken cancellationToken)

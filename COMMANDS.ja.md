@@ -12,10 +12,14 @@ MCPの`get_version`と同じサーバー名および4要素バージョンを返
 ### `shiori find`
 
 ```powershell
-shiori find <クエリ> [--allow <絶対ディレクトリ> ...] [--limit <1-100>]
+shiori find [<クエリ>] [--name-starts-with <文字列>] [--name-ends-with <文字列>] [--allow <絶対ディレクトリ> ...] [--limit <1-100>]
 ```
 
-作成済みSQLiteインデックスから、ファイル名または相対パスの一部を検索します。
+作成済みSQLiteインデックスを検索します。`<クエリ>`はファイル名または相対パスの
+どこかに含まれる文字列に一致します。`--name-starts-with`と`--name-ends-with`は
+ファイル名の先頭と末尾だけに一致します（例: `--name-starts-with Thunderbird`、
+`--name-ends-with .cs`）。条件は1つ以上指定し、指定したすべての条件に一致する
+ファイルを返します。英字の大文字・小文字は区別せず、`%`と`_`は文字どおりに扱います。
 `--allow`を省略すると全登録ワークスペースを検索します。複数指定すると選択した
 集合を検索し、結果とワークスペース別エラーはMCPの`search_files`と一致します。
 
@@ -70,6 +74,7 @@ shiori mcp [--port <1-65535>]
 - `workspace_list`: 許可ワークスペースとデータベースを列挙します。
 - `index_status`: 許可ワークスペース1件のインデックス状態を返します。
 - `search_files`: 1件、複数、または全許可ワークスペースを検索します。
+  `query`、`nameStartsWith`、`nameEndsWith`は`shiori find`と同じ意味で、1つ以上必要です。
 - `workspace_add`: ディレクトリを登録し、稼働中のアクセス境界へ追加します。
   WindowsではMCPサーバーがWindows Terminalを直接起動し、初回インデックスの
   作成進捗を表示します。Windows以外ではMCP要求内で初回インデックスを作成します。
